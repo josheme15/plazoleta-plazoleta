@@ -1,0 +1,952 @@
+{
+  "info": {
+    "name": "Plazoleta - Plazoleta",
+    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere ambos microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d).\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad (usar el Collection Runner).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "00 - Preparacion (microservicio usuarios)",
+      "description": "Obtiene el token del ADMIN y crea un propietario en plazoleta-usuarios (debe estar levantado en {{usuariosUrl}}).",
+      "item": [
+        {
+          "name": "Login ADMIN (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/auth/login",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"adminToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear propietario (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/users/owner",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "users",
+                "owner"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Pedro\",\n  \"lastName\": \"Gomez\",\n  \"documentNumber\": \"{{ownerDocument}}\",\n  \"phone\": \"+573001112233\",\n  \"birthDate\": \"1985-03-15\",\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"Clave123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const unique = Date.now().toString();",
+                  "pm.collectionVariables.set(\"ownerDocument\", unique.slice(-10));",
+                  "pm.collectionVariables.set(\"ownerEmail\", \"dueno_\" + unique + \"@correo.com\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"ownerId\", pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login PROPIETARIO (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/auth/login",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"Clave123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"ownerToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - HU-2 Crear restaurante",
+      "description": "POST /restaurants. Requiere token de ADMIN (se hereda de la coleccion: {{adminToken}}).",
+      "item": [
+        {
+          "name": "Crear restaurante (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "description": "Genera un NIT unico en cada ejecucion para poder repetir la coleccion.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"{{restaurantNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"restaurantNit\", Date.now().toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Devuelve el restaurante creado\", () => {",
+                  "    pm.expect(body.id).to.be.a(\"number\");",
+                  "    pm.expect(body.nit).to.eql(pm.collectionVariables.get(\"restaurantNit\"));",
+                  "    pm.expect(body.ownerId).to.eql(Number(pm.collectionVariables.get(\"ownerId\")));",
+                  "    pm.expect(body.phone).to.eql(\"+573005698325\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nombre con letras y numeros (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sabores 123\",\n  \"nit\": \"{{randomNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"3001234567\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"randomNit\", Date.now().toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Conserva el nombre\", () => pm.expect(pm.response.json().name).to.eql(\"Sabores 123\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NIT duplicado (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Otro restaurante\",\n  \"nit\": \"{{restaurantNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 409);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de NIT duplicado\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"Ya existe un restaurante registrado con ese NIT\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nombre solo con numeros (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"12345\",\n  \"nit\": \"{{randomNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"randomNit\", Date.now().toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Detalle sobre el nombre\", () => {",
+                  "    pm.expect(pm.response.json().details.join(\" \")).to.include(\"name\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NIT no numerico (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"900-123-456A\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Detalle sobre el NIT\", () => {",
+                  "    pm.expect(pm.response.json().details.join(\" \")).to.include(\"nit\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Telefono con mas de 13 caracteres (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"{{randomNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+5730056983251\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"randomNit\", Date.now().toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Detalle sobre el telefono\", () => {",
+                  "    pm.expect(pm.response.json().details.join(\" \")).to.include(\"phone\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Telefono con letras (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"{{randomNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"300abc8325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"randomNit\", Date.now().toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Detalle sobre el telefono\", () => {",
+                  "    pm.expect(pm.response.json().details.join(\" \")).to.include(\"phone\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Campos obligatorios vacios (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"nit\": \"\",\n  \"address\": \"\",\n  \"phone\": \"\",\n  \"urlLogo\": \"\",\n  \"ownerId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Reporta los 6 campos obligatorios\", () => {",
+                  "    const fields = pm.response.json().details.map((d) => d.split(\":\")[0]);",
+                  "    [\"name\", \"nit\", \"address\", \"phone\", \"urlLogo\", \"ownerId\"].forEach((f) => pm.expect(fields).to.include(f));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Propietario inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"{{randomNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": 999999999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"randomNit\", Date.now().toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 404);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de propietario inexistente\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"No existe un usuario con el id de propietario indicado\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Usuario sin rol propietario - ADMIN id 1 (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"{{randomNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"randomNit\", Date.now().toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de rol invalido\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"El usuario indicado no tiene rol de propietario\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - HU-2 Seguridad (token y rol)",
+      "item": [
+        {
+          "name": "Sin token (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"{{restaurantNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 401);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token invalido (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"{{restaurantNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "token.invalido.firma",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 401);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Propietario intenta crear restaurante (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Restaurante El Sabor\",\n  \"nit\": \"{{randomNit}}\",\n  \"address\": \"Calle 10 # 20-30\",\n  \"phone\": \"+573005698325\",\n  \"urlLogo\": \"https://misitio.com/logo.png\",\n  \"ownerId\": {{ownerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"randomNit\", Date.now().toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 403);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de permisos\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"No tiene permisos para realizar esta accion\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "ownerToken",
+      "value": ""
+    },
+    {
+      "key": "ownerId",
+      "value": ""
+    },
+    {
+      "key": "ownerEmail",
+      "value": ""
+    },
+    {
+      "key": "ownerDocument",
+      "value": ""
+    },
+    {
+      "key": "restaurantNit",
+      "value": ""
+    },
+    {
+      "key": "randomNit",
+      "value": ""
+    }
+  ]
+}

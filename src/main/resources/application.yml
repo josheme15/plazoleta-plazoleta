@@ -1,0 +1,27 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: plazoleta-plazoleta
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/plazoleta_plazoleta}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+security:
+  jwt:
+    # Debe ser la misma clave que usa plazoleta-usuarios para firmar los tokens.
+    secret: ${JWT_SECRET:cGxhem9sZXRhLWRlLWNvbWlkYXMtc2VjcmV0by1zdXBlci1zZWd1cm8tMjU2LWJpdHM=}
+
+clients:
+  usuarios:
+    url: ${USUARIOS_URL:http://localhost:8081}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
