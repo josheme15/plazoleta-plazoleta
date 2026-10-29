@@ -12,6 +12,10 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+  jackson:
+    deserialization:
+      # Rechaza decimales en campos enteros (ej. precio 12.5) en lugar de truncarlos.
+      accept-float-as-int: false
 
 security:
   jwt:
