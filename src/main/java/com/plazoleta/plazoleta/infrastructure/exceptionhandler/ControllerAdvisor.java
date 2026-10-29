@@ -1,8 +1,11 @@
 package com.plazoleta.plazoleta.infrastructure.exceptionhandler;
 
+import com.plazoleta.plazoleta.domain.exception.CategoryNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DomainException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
+import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
 import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.infrastructure.output.client.exception.UserServiceUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,9 +25,15 @@ public class ControllerAdvisor {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
 
-    @ExceptionHandler(OwnerNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleOwnerNotFound(OwnerNotFoundException ex) {
+    @ExceptionHandler({OwnerNotFoundException.class, RestaurantNotFoundException.class,
+            CategoryNotFoundException.class})
+    public ResponseEntity<ErrorResponse> handleNotFound(DomainException ex) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(NotRestaurantOwnerException.class)
+    public ResponseEntity<ErrorResponse> handleNotRestaurantOwner(NotRestaurantOwnerException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(DomainException.class)
