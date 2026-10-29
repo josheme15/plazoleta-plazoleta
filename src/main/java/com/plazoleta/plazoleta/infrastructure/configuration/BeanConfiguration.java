@@ -1,13 +1,24 @@
 package com.plazoleta.plazoleta.infrastructure.configuration;
 
+import com.plazoleta.plazoleta.domain.api.IDishServicePort;
 import com.plazoleta.plazoleta.domain.api.IRestaurantServicePort;
+import com.plazoleta.plazoleta.domain.spi.IAuthenticatedUserPort;
+import com.plazoleta.plazoleta.domain.spi.ICategoryPersistencePort;
+import com.plazoleta.plazoleta.domain.spi.IDishPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IUserClientPort;
+import com.plazoleta.plazoleta.domain.usecase.DishUseCase;
 import com.plazoleta.plazoleta.domain.usecase.RestaurantUseCase;
 import com.plazoleta.plazoleta.infrastructure.output.client.adapter.UserRestClientAdapter;
+import com.plazoleta.plazoleta.infrastructure.output.jpa.adapter.CategoryJpaAdapter;
+import com.plazoleta.plazoleta.infrastructure.output.jpa.adapter.DishJpaAdapter;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.adapter.RestaurantJpaAdapter;
+import com.plazoleta.plazoleta.infrastructure.output.jpa.mapper.IDishEntityMapper;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.mapper.IRestaurantEntityMapper;
+import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.ICategoryRepository;
+import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IDishRepository;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IRestaurantRepository;
+import com.plazoleta.plazoleta.infrastructure.security.AuthenticatedUserAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +31,9 @@ public class BeanConfiguration {
 
     private final IRestaurantRepository restaurantRepository;
     private final IRestaurantEntityMapper restaurantEntityMapper;
+    private final IDishRepository dishRepository;
+    private final IDishEntityMapper dishEntityMapper;
+    private final ICategoryRepository categoryRepository;
 
     @Value("${clients.usuarios.url}")
     private String usuariosUrl;
@@ -42,5 +56,26 @@ public class BeanConfiguration {
     @Bean
     public IRestaurantServicePort restaurantServicePort(IUserClientPort userClientPort) {
         return new RestaurantUseCase(restaurantPersistencePort(), userClientPort);
+    }
+
+    @Bean
+    public IDishPersistencePort dishPersistencePort() {
+        return new DishJpaAdapter(dishRepository, restaurantRepository, categoryRepository, dishEntityMapper);
+    }
+
+    @Bean
+    public ICategoryPersistencePort categoryPersistencePort() {
+        return new CategoryJpaAdapter(categoryRepository);
+    }
+
+    @Bean
+    public IAuthenticatedUserPort authenticatedUserPort() {
+        return new AuthenticatedUserAdapter();
+    }
+
+    @Bean
+    public IDishServicePort dishServicePort() {
+        return new DishUseCase(dishPersistencePort(), restaurantPersistencePort(), categoryPersistencePort(),
+                authenticatedUserPort());
     }
 }
