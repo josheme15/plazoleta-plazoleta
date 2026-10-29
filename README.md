@@ -1,13 +1,14 @@
 # plazoleta-plazoleta
 
 Microservicio de **plazoleta** de la plazoleta de comidas (Spring Boot 3 + arquitectura hexagonal).
-Responsable de restaurantes (y en próximas HU: platos y pedidos).
+Responsable de restaurantes y platos (y en próximas HU: pedidos).
 
 ## Historias de usuario implementadas
 
 | HU | Descripción | Endpoint | Rol |
 |----|-------------|----------|-----|
 | HU-2 | Crear restaurante | `POST /restaurants` | ADMIN |
+| HU-3 | Crear plato | `POST /dishes` | OWNER (propietario del restaurante) |
 
 ### Reglas de la HU-2
 
@@ -16,6 +17,25 @@ Responsable de restaurantes (y en próximas HU: platos y pedidos).
 - NIT solo numérico y **único**.
 - Teléfono: máximo 13 caracteres, solo dígitos y `+` opcional al inicio (ej. `+573005698325`).
 - El nombre puede contener números, pero no puede ser solo números.
+
+### Reglas de la HU-3
+
+- Solo el **propietario del restaurante** puede crear platos: el token debe tener rol `OWNER` y su id
+  (claim `id` del JWT) debe coincidir con el `ownerId` del restaurante (si no, 403).
+- Campos obligatorios: nombre, precio, descripción, urlImagen, categoría e id del restaurante.
+- Precio: número entero positivo mayor a 0 (se rechazan `0`, negativos y decimales).
+- El plato se asocia a un restaurante y a una categoría existentes (si no existen, 404).
+- Todo plato nuevo queda con `active = true`, aunque se envíe otro valor.
+
+Categorías precargadas al iniciar el servicio:
+
+| id | Categoría |
+|----|-----------|
+| 1 | Entradas |
+| 2 | Platos fuertes |
+| 3 | Postres |
+| 4 | Bebidas |
+| 5 | Acompanamientos |
 
 ## Dependencia con plazoleta-usuarios
 
@@ -64,26 +84,32 @@ curl -X POST http://localhost:8081/auth/login -H "Content-Type: application/json
 curl -X POST http://localhost:8082/restaurants \
   -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
   -d '{"name":"Restaurante El Sabor","nit":"900123456","address":"Calle 10 # 20-30","phone":"+573005698325","urlLogo":"https://misitio.com/logo.png","ownerId":2}'
+
+# 3. Crear plato con el token del PROPIETARIO de ese restaurante (login en usuarios con su correo)
+curl -X POST http://localhost:8082/dishes \
+  -H "Authorization: Bearer <TOKEN_PROPIETARIO>" -H "Content-Type: application/json" \
+  -d '{"name":"Bandeja paisa","price":25000,"description":"Frijoles, arroz y carne","urlImage":"https://misitio.com/bandeja.png","categoryId":2,"restaurantId":1}'
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`
+- `plazoleta-plazoleta.postman_collection.json`: 29 peticiones y 68 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
 2. Seleccionar el entorno **Plazoleta - Local (plazoleta)**.
 3. Clic derecho sobre la colección → **Run collection** → **Run**.
 
-La carpeta `00 - Preparacion` obtiene el token del ADMIN y crea un propietario en `plazoleta-usuarios`;
-luego `01 - HU-2` y `02 - Seguridad` prueban la creación de restaurantes. Los NIT se generan únicos en cada ejecución.
+La carpeta `00 - Preparacion` obtiene el token del ADMIN y crea dos propietarios en `plazoleta-usuarios`;
+luego `01 - HU-2` y `02 - Seguridad` prueban la creación de restaurantes, y `03 - HU-3` crea platos en el
+restaurante del primer propietario (el segundo se usa para comprobar el 403). Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
 
 ```
-domain/            Java puro: modelo Restaurant, puertos (api / spi), caso de uso, excepciones
+domain/            Java puro: modelos Restaurant y Dish, puertos (api / spi), casos de uso, excepciones
 application/       DTOs, mappers (MapStruct) y handlers
 infrastructure/    Controller REST, adaptador JPA, cliente HTTP a usuarios, seguridad JWT,
                    manejo de errores y configuración
