@@ -1,7 +1,10 @@
 package com.plazoleta.plazoleta.domain.usecase;
 
 import com.plazoleta.plazoleta.domain.exception.CategoryNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.InvalidDescriptionException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPriceException;
+import com.plazoleta.plazoleta.domain.exception.NoDishFieldsToUpdateException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
@@ -198,5 +201,123 @@ class DishUseCaseTest {
 
         assertThrows(RequiredFieldException.class, () -> dishUseCase.createDish(dish));
         verify(restaurantPersistencePort, never()).findById(any());
+    }
+
+    // ---------- HU-4: editar plato ----------
+
+    private static final Long DISH_ID = 50L;
+
+    private Dish storedDish() {
+        return new Dish(DISH_ID, "Bandeja paisa", 25000, "Descripcion original",
+                "https://misitio.com/bandeja.png", CATEGORY_ID, RESTAURANT_ID, true);
+    }
+
+    private Dish changes(Integer price, String description) {
+        Dish changes = new Dish();
+        changes.setPrice(price);
+        changes.setDescription(description);
+        return changes;
+    }
+
+    private void givenStoredDishOwnedByAuthenticatedUser() {
+        when(dishPersistencePort.findById(DISH_ID)).thenReturn(Optional.of(storedDish()));
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(OWNER_ID);
+        when(dishPersistencePort.saveDish(any(Dish.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @Test
+    void updateDish_withPriceAndDescription_updatesBothFields() {
+        givenStoredDishOwnedByAuthenticatedUser();
+
+        Dish result = dishUseCase.updateDish(DISH_ID, changes(30000, "Nueva descripcion"));
+
+        assertEquals(30000, result.getPrice());
+        assertEquals("Nueva descripcion", result.getDescription());
+        verify(dishPersistencePort).saveDish(result);
+    }
+
+    @Test
+    void updateDish_withOnlyPrice_keepsDescription() {
+        givenStoredDishOwnedByAuthenticatedUser();
+
+        Dish result = dishUseCase.updateDish(DISH_ID, changes(18000, null));
+
+        assertEquals(18000, result.getPrice());
+        assertEquals("Descripcion original", result.getDescription());
+    }
+
+    @Test
+    void updateDish_withOnlyDescription_keepsPrice() {
+        givenStoredDishOwnedByAuthenticatedUser();
+
+        Dish result = dishUseCase.updateDish(DISH_ID, changes(null, "Solo cambia la descripcion"));
+
+        assertEquals(25000, result.getPrice());
+        assertEquals("Solo cambia la descripcion", result.getDescription());
+    }
+
+    @Test
+    void updateDish_ignoresFieldsOtherThanPriceAndDescription() {
+        givenStoredDishOwnedByAuthenticatedUser();
+        Dish changes = new Dish(999L, "Otro nombre", 30000, "Nueva descripcion", "https://otra.png",
+                5L, 777L, false);
+
+        Dish result = dishUseCase.updateDish(DISH_ID, changes);
+
+        assertEquals(DISH_ID, result.getId());
+        assertEquals("Bandeja paisa", result.getName());
+        assertEquals("https://misitio.com/bandeja.png", result.getUrlImage());
+        assertEquals(CATEGORY_ID, result.getCategoryId());
+        assertEquals(RESTAURANT_ID, result.getRestaurantId());
+        assertTrue(result.getActive());
+        assertEquals(30000, result.getPrice());
+    }
+
+    @Test
+    void updateDish_withoutPriceNorDescription_throwsException() {
+        assertThrows(NoDishFieldsToUpdateException.class, () -> dishUseCase.updateDish(DISH_ID, changes(null, null)));
+        verify(dishPersistencePort, never()).findById(any());
+        verify(dishPersistencePort, never()).saveDish(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1, -30000})
+    void updateDish_withNonPositivePrice_throwsException(int price) {
+        assertThrows(InvalidPriceException.class, () -> dishUseCase.updateDish(DISH_ID, changes(price, null)));
+        verify(dishPersistencePort, never()).saveDish(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void updateDish_withBlankDescription_throwsException(String description) {
+        assertThrows(InvalidDescriptionException.class,
+                () -> dishUseCase.updateDish(DISH_ID, changes(null, description)));
+        verify(dishPersistencePort, never()).saveDish(any());
+    }
+
+    @Test
+    void updateDish_whenDishDoesNotExist_throwsException() {
+        when(dishPersistencePort.findById(DISH_ID)).thenReturn(Optional.empty());
+
+        assertThrows(DishNotFoundException.class, () -> dishUseCase.updateDish(DISH_ID, changes(30000, null)));
+        verify(dishPersistencePort, never()).saveDish(any());
+    }
+
+    @Test
+    void updateDish_whenUserIsNotOwnerOfRestaurant_throwsException() {
+        when(dishPersistencePort.findById(DISH_ID)).thenReturn(Optional.of(storedDish()));
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(99L);
+
+        assertThrows(NotRestaurantOwnerException.class,
+                () -> dishUseCase.updateDish(DISH_ID, changes(30000, null)));
+        verify(dishPersistencePort, never()).saveDish(any());
+    }
+
+    @Test
+    void updateDish_withNullId_throwsException() {
+        assertThrows(RequiredFieldException.class, () -> dishUseCase.updateDish(null, changes(30000, null)));
+        verify(dishPersistencePort, never()).findById(any());
     }
 }

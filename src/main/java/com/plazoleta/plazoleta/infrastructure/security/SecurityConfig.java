@@ -35,6 +35,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/restaurants").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/dishes").hasRole("OWNER")
+                        .requestMatchers(HttpMethod.PATCH, "/dishes/*").hasRole("OWNER")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, e) ->

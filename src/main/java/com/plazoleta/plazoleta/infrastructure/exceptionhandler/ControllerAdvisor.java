@@ -1,6 +1,7 @@
 package com.plazoleta.plazoleta.infrastructure.exceptionhandler;
 
 import com.plazoleta.plazoleta.domain.exception.CategoryNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DomainException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
@@ -26,7 +27,7 @@ public class ControllerAdvisor {
     }
 
     @ExceptionHandler({OwnerNotFoundException.class, RestaurantNotFoundException.class,
-            CategoryNotFoundException.class})
+            CategoryNotFoundException.class, DishNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(DomainException ex) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
     }

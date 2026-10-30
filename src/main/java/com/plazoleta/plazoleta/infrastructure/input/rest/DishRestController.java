@@ -1,6 +1,7 @@
 package com.plazoleta.plazoleta.infrastructure.input.rest;
 
 import com.plazoleta.plazoleta.application.dto.request.DishRequestDto;
+import com.plazoleta.plazoleta.application.dto.request.DishUpdateRequestDto;
 import com.plazoleta.plazoleta.application.dto.response.DishResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
 import com.plazoleta.plazoleta.infrastructure.exceptionhandler.ErrorResponse;
@@ -15,6 +16,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -49,5 +52,30 @@ public class DishRestController {
     @PostMapping
     public ResponseEntity<DishResponseDto> createDish(@Valid @RequestBody DishRequestDto dishRequestDto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(dishHandler.createDish(dishRequestDto));
+    }
+
+    @Operation(summary = "Editar plato",
+            description = "Actualiza el precio y/o la descripcion de un plato. Solo el PROPIETARIO del restaurante "
+                    + "al que pertenece el plato puede hacerlo. Cualquier otro campo enviado se ignora.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Plato actualizado",
+                    content = @Content(schema = @Schema(implementation = DishResponseDto.class))),
+            @ApiResponse(responseCode = "400",
+                    description = "No se envio precio ni descripcion, el precio no es un entero mayor a 0, "
+                            + "la descripcion esta vacia o el id no es numerico",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, invalido o expirado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403",
+                    description = "El usuario no tiene rol PROPIETARIO o no es el propietario del restaurante",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No existe un plato con el id indicado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PatchMapping("/{id}")
+    public ResponseEntity<DishResponseDto> updateDish(@PathVariable Long id,
+                                                      @Valid @RequestBody DishUpdateRequestDto dishUpdateRequestDto) {
+        return ResponseEntity.ok(dishHandler.updateDish(id, dishUpdateRequestDto));
     }
 }

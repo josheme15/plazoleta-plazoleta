@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Plazoleta - Plazoleta",
-    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere ambos microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d).\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 (usar el Collection Runner).",
+    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere ambos microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d).\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 (usar el Collection Runner).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -1070,6 +1070,7 @@
                 "exec": [
                   "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
                   "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"dishId\", body.id);",
                   "pm.test(\"El plato queda activo por defecto\", () => pm.expect(body.active).to.eql(true));",
                   "pm.test(\"Asociado al restaurante y la categoria\", () => {",
                   "    pm.expect(body.id).to.be.a(\"number\");",
@@ -1663,6 +1664,783 @@
           ]
         }
       ]
+    },
+    {
+      "name": "04 - HU-4 Editar plato",
+      "description": "PATCH /dishes/{id}. Solo se editan precio y descripcion. Requiere token del PROPIETARIO del restaurante ({{ownerToken}}). Usa el plato creado en \"Crear plato (201)\".",
+      "item": [
+        {
+          "name": "Editar precio y descripcion (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 28000,\n  \"description\": \"Frijoles, arroz, carne molida, chicharron, huevo, aguacate y arepa\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Actualiza precio y descripcion\", () => {",
+                  "    pm.expect(body.price).to.eql(28000);",
+                  "    pm.expect(body.description).to.eql(\"Frijoles, arroz, carne molida, chicharron, huevo, aguacate y arepa\");",
+                  "});",
+                  "pm.test(\"No cambia los demas campos\", () => {",
+                  "    pm.expect(body.id).to.eql(Number(pm.collectionVariables.get(\"dishId\")));",
+                  "    pm.expect(body.name).to.eql(\"Bandeja paisa\");",
+                  "    pm.expect(body.categoryId).to.eql(2);",
+                  "    pm.expect(body.restaurantId).to.eql(Number(pm.collectionVariables.get(\"restaurantId\")));",
+                  "    pm.expect(body.active).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar solo el precio (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 30000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Cambia el precio y conserva la descripcion\", () => {",
+                  "    pm.expect(body.price).to.eql(30000);",
+                  "    pm.expect(body.description).to.eql(\"Frijoles, arroz, carne molida, chicharron, huevo, aguacate y arepa\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar solo la descripcion (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Plato tipico antioqueno\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Cambia la descripcion y conserva el precio\", () => {",
+                  "    pm.expect(body.description).to.eql(\"Plato tipico antioqueno\");",
+                  "    pm.expect(body.price).to.eql(30000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Intentar editar otros campos - se ignoran (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "description": "Envia nombre, imagen, categoria, restaurante y activo: solo se aplica el precio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nombre cambiado\",\n  \"urlImage\": \"https://otra.png\",\n  \"categoryId\": 5,\n  \"restaurantId\": 999999999,\n  \"active\": false,\n  \"price\": 32000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Solo se aplica el precio\", () => {",
+                  "    pm.expect(body.price).to.eql(32000);",
+                  "    pm.expect(body.name).to.eql(\"Bandeja paisa\");",
+                  "    pm.expect(body.urlImage).to.eql(\"https://misitio.com/bandeja-paisa.png\");",
+                  "    pm.expect(body.categoryId).to.eql(2);",
+                  "    pm.expect(body.restaurantId).to.eql(Number(pm.collectionVariables.get(\"restaurantId\")));",
+                  "    pm.expect(body.active).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin precio ni descripcion (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de campos a actualizar\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"Debe enviar al menos el precio o la descripcion del plato para actualizar\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Precio cero (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Precio con decimales (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 28000.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Descripcion vacia (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de descripcion vacia\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"La descripcion del plato no puede estar vacia\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Plato inexistente (404)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "999999999"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 28000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 404);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de plato inexistente\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"No existe un plato con el id indicado\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Id no numerico (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "abc"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 28000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 400);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Propietario de OTRO restaurante (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherOwnerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 403);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de propietario del restaurante\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"Solo el propietario del restaurante puede realizar esta accion\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ADMIN intenta editar plato (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 403);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin token (401)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{dishId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{dishId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"status\", 401);",
+                  "    pm.expect(body).to.have.property(\"message\");",
+                  "    pm.expect(body).to.have.property(\"timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -1704,6 +2482,10 @@
     },
     {
       "key": "restaurantId",
+      "value": ""
+    },
+    {
+      "key": "dishId",
       "value": ""
     },
     {
