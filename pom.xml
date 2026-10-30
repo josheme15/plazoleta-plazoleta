@@ -22,6 +22,19 @@
         <lombok.version>1.18.38</lombok.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.8.6</springdoc.version>
+
+        <!-- SonarCloud (SonarQube Cloud): el analisis se ejecuta desde GitHub Actions -->
+        <sonar.organization>josheme15</sonar.organization>
+        <sonar.projectKey>josheme15_plazoleta-plazoleta</sonar.projectKey>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!-- Se excluyen de la cobertura las clases sin logica (DTOs, entidades, configuracion y clase main) -->
+        <sonar.coverage.exclusions>
+            **/application/dto/**,
+            **/infrastructure/output/jpa/entity/**,
+            **/infrastructure/configuration/**,
+            **/*Application.java
+        </sonar.coverage.exclusions>
     </properties>
 
     <dependencies>
