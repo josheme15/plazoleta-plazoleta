@@ -9,6 +9,7 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 |----|-------------|----------|-----|
 | HU-2 | Crear restaurante | `POST /restaurants` | ADMIN |
 | HU-3 | Crear plato | `POST /dishes` | OWNER (propietario del restaurante) |
+| HU-4 | Editar plato (precio y descripción) | `PATCH /dishes/{id}` | OWNER (propietario del restaurante) |
 
 ### Reglas de la HU-2
 
@@ -26,6 +27,13 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 - Precio: número entero positivo mayor a 0 (se rechazan `0`, negativos y decimales).
 - El plato se asocia a un restaurante y a una categoría existentes (si no existen, 404).
 - Todo plato nuevo queda con `active = true`, aunque se envíe otro valor.
+
+### Reglas de la HU-4
+
+- Solo se pueden editar el **precio** y la **descripción**; cualquier otro campo enviado se ignora.
+- Hay que enviar al menos uno de los dos (si no, 400).
+- Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
+- Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
 
 Categorías precargadas al iniciar el servicio:
 
@@ -89,13 +97,18 @@ curl -X POST http://localhost:8082/restaurants \
 curl -X POST http://localhost:8082/dishes \
   -H "Authorization: Bearer <TOKEN_PROPIETARIO>" -H "Content-Type: application/json" \
   -d '{"name":"Bandeja paisa","price":25000,"description":"Frijoles, arroz y carne","urlImage":"https://misitio.com/bandeja.png","categoryId":2,"restaurantId":1}'
+
+# 4. Editar precio y/o descripcion del plato (mismo token del PROPIETARIO)
+curl -X PATCH http://localhost:8082/dishes/1 \
+  -H "Authorization: Bearer <TOKEN_PROPIETARIO>" -H "Content-Type: application/json" \
+  -d '{"price":28000,"description":"Frijoles, arroz, carne y arepa"}'
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 29 peticiones y 68 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 42 peticiones y 99 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -104,7 +117,8 @@ En la carpeta `postman/`:
 
 La carpeta `00 - Preparacion` obtiene el token del ADMIN y crea dos propietarios en `plazoleta-usuarios`;
 luego `01 - HU-2` y `02 - Seguridad` prueban la creación de restaurantes, y `03 - HU-3` crea platos en el
-restaurante del primer propietario (el segundo se usa para comprobar el 403). Los NIT se generan únicos en cada ejecución.
+restaurante del primer propietario (el segundo se usa para comprobar el 403). `04 - HU-4` edita ese plato.
+Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
 

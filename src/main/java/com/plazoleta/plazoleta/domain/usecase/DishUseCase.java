@@ -2,7 +2,10 @@ package com.plazoleta.plazoleta.domain.usecase;
 
 import com.plazoleta.plazoleta.domain.api.IDishServicePort;
 import com.plazoleta.plazoleta.domain.exception.CategoryNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.InvalidDescriptionException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPriceException;
+import com.plazoleta.plazoleta.domain.exception.NoDishFieldsToUpdateException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
@@ -37,17 +40,51 @@ public class DishUseCase implements IDishServicePort {
             throw new InvalidPriceException();
         }
 
-        Restaurant restaurant = restaurantPersistencePort.findById(dish.getRestaurantId())
-                .orElseThrow(RestaurantNotFoundException::new);
-        if (!restaurant.getOwnerId().equals(authenticatedUserPort.getAuthenticatedUserId())) {
-            throw new NotRestaurantOwnerException();
-        }
+        validateRestaurantOwner(dish.getRestaurantId());
         if (!categoryPersistencePort.existsById(dish.getCategoryId())) {
             throw new CategoryNotFoundException();
         }
 
         dish.setActive(true);
         return dishPersistencePort.saveDish(dish);
+    }
+
+    @Override
+    public Dish updateDish(Long dishId, Dish changes) {
+        if (dishId == null) {
+            throw new RequiredFieldException("idPlato");
+        }
+        Integer newPrice = changes.getPrice();
+        String newDescription = changes.getDescription();
+        if (newPrice == null && newDescription == null) {
+            throw new NoDishFieldsToUpdateException();
+        }
+        if (newPrice != null && newPrice <= 0) {
+            throw new InvalidPriceException();
+        }
+        if (newDescription != null && newDescription.isBlank()) {
+            throw new InvalidDescriptionException();
+        }
+
+        Dish dish = dishPersistencePort.findById(dishId).orElseThrow(DishNotFoundException::new);
+        validateRestaurantOwner(dish.getRestaurantId());
+
+        // Solo se pueden editar el precio y la descripcion.
+        if (newPrice != null) {
+            dish.setPrice(newPrice);
+        }
+        if (newDescription != null) {
+            dish.setDescription(newDescription);
+        }
+        return dishPersistencePort.saveDish(dish);
+    }
+
+    private void validateRestaurantOwner(Long restaurantId) {
+        Restaurant restaurant = restaurantPersistencePort.findById(restaurantId)
+                .orElseThrow(RestaurantNotFoundException::new);
+        if (!restaurant.getOwnerId().equals(authenticatedUserPort.getAuthenticatedUserId())) {
+            throw new NotRestaurantOwnerException();
+        }
     }
 
     private void validateRequiredFields(Dish dish) {

@@ -9,6 +9,8 @@ import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IDishReposit
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IRestaurantRepository;
 import lombok.RequiredArgsConstructor;
 
+import java.util.Optional;
+
 @RequiredArgsConstructor
 public class DishJpaAdapter implements IDishPersistencePort {
 
@@ -23,5 +25,10 @@ public class DishJpaAdapter implements IDishPersistencePort {
         entity.setRestaurant(restaurantRepository.getReferenceById(dish.getRestaurantId()));
         entity.setCategory(categoryRepository.getReferenceById(dish.getCategoryId()));
         return dishEntityMapper.toDish(dishRepository.save(entity));
+    }
+
+    @Override
+    public Optional<Dish> findById(Long dishId) {
+        return dishRepository.findById(dishId).map(dishEntityMapper::toDish);
     }
 }

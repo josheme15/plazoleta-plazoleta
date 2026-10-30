@@ -1,6 +1,7 @@
 package com.plazoleta.plazoleta.application.mapper;
 
 import com.plazoleta.plazoleta.application.dto.request.DishRequestDto;
+import com.plazoleta.plazoleta.application.dto.request.DishUpdateRequestDto;
 import com.plazoleta.plazoleta.domain.model.Dish;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -12,4 +13,6 @@ public interface IDishRequestMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "active", ignore = true)
     Dish toDish(DishRequestDto dishRequestDto);
+
+    Dish toDish(DishUpdateRequestDto dishUpdateRequestDto);
 }

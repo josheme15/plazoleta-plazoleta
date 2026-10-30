@@ -1,6 +1,7 @@
 package com.plazoleta.plazoleta.application.handler.impl;
 
 import com.plazoleta.plazoleta.application.dto.request.DishRequestDto;
+import com.plazoleta.plazoleta.application.dto.request.DishUpdateRequestDto;
 import com.plazoleta.plazoleta.application.dto.response.DishResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
 import com.plazoleta.plazoleta.application.mapper.IDishRequestMapper;
@@ -22,5 +23,11 @@ public class DishHandler implements IDishHandler {
     @Override
     public DishResponseDto createDish(DishRequestDto dishRequestDto) {
         return dishResponseMapper.toResponse(dishServicePort.createDish(dishRequestMapper.toDish(dishRequestDto)));
+    }
+
+    @Override
+    public DishResponseDto updateDish(Long dishId, DishUpdateRequestDto dishUpdateRequestDto) {
+        return dishResponseMapper.toResponse(
+                dishServicePort.updateDish(dishId, dishRequestMapper.toDish(dishUpdateRequestDto)));
     }
 }
