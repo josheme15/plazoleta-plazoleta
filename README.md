@@ -10,6 +10,7 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 | HU-2 | Crear restaurante | `POST /restaurants` | ADMIN |
 | HU-3 | Crear plato | `POST /dishes` | OWNER (propietario del restaurante) |
 | HU-4 | Editar plato (precio y descripción) | `PATCH /dishes/{id}` | OWNER (propietario del restaurante) |
+| HU-5 | Autenticación: validación de token y rol en todos los endpoints | — | — |
 
 ### Reglas de la HU-2
 
@@ -34,6 +35,18 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-5
+
+El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el JWT (firma y expiración) y el rol:
+
+| Endpoint | Rol permitido | Sin token / token inválido | Rol incorrecto |
+|----------|---------------|----------------------------|----------------|
+| `POST /restaurants` | ADMIN | 401 | 403 |
+| `POST /dishes` | OWNER, dueño del restaurante | 401 | 403 |
+| `PATCH /dishes/{id}` | OWNER, dueño del restaurante | 401 | 403 |
+
+`EndpointSecurityTest` verifica esta matriz con tokens reales; la regla "dueño del restaurante" se prueba en `DishUseCaseTest`.
 
 Categorías precargadas al iniciar el servicio:
 
