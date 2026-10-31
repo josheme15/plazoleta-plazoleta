@@ -26,6 +26,7 @@ import java.util.Date;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -152,6 +153,22 @@ class EndpointSecurityTest {
 
         mockMvc.perform(patch("/dishes/1").header(HttpHeaders.AUTHORIZATION, bearer("OWNER"))
                         .contentType(MediaType.APPLICATION_JSON).content(DISH_UPDATE_BODY))
+                .andExpect(status().isOk());
+    }
+
+    // ---------- GET /restaurants/{id}: cualquier usuario autenticado (HU-6) ----------
+
+    @Test
+    void getRestaurantById_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/restaurants/1")).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "EMPLOYEE", "CLIENT"})
+    void getRestaurantById_withAnyAuthenticatedRole_returns200(String role) throws Exception {
+        when(restaurantHandler.getRestaurantById(anyLong())).thenReturn(new RestaurantResponseDto());
+
+        mockMvc.perform(get("/restaurants/1").header(HttpHeaders.AUTHORIZATION, bearer(role)))
                 .andExpect(status().isOk());
     }
 }

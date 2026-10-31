@@ -5,4 +5,6 @@ import com.plazoleta.plazoleta.domain.model.Restaurant;
 public interface IRestaurantServicePort {
 
     Restaurant createRestaurant(Restaurant restaurant);
+
+    Restaurant getRestaurantById(Long restaurantId);
 }
