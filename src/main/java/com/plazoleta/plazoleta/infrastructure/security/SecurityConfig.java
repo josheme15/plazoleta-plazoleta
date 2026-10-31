@@ -36,6 +36,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/restaurants").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/dishes").hasRole("OWNER")
                         .requestMatchers(HttpMethod.PATCH, "/dishes/*").hasRole("OWNER")
+                        .requestMatchers(HttpMethod.PATCH, "/dishes/*/status").hasRole("OWNER")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, e) ->
