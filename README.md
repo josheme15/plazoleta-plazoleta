@@ -11,6 +11,7 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 | HU-3 | Crear plato | `POST /dishes` | OWNER (propietario del restaurante) |
 | HU-4 | Editar plato (precio y descripción) | `PATCH /dishes/{id}` | OWNER (propietario del restaurante) |
 | HU-5 | Autenticación: validación de token y rol en todos los endpoints | — | — |
+| HU-6 | Consultar restaurante por id (usado por usuarios al crear empleados) | `GET /restaurants/{id}` | Autenticado |
 
 ### Reglas de la HU-2
 
@@ -45,6 +46,7 @@ El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el
 | `POST /restaurants` | ADMIN | 401 | 403 |
 | `POST /dishes` | OWNER, dueño del restaurante | 401 | 403 |
 | `PATCH /dishes/{id}` | OWNER, dueño del restaurante | 401 | 403 |
+| `GET /restaurants/{id}` | Cualquier usuario autenticado | 401 | — |
 
 `EndpointSecurityTest` verifica esta matriz con tokens reales; la regla "dueño del restaurante" se prueba en `DishUseCaseTest`.
 
@@ -121,7 +123,7 @@ curl -X PATCH http://localhost:8082/dishes/1 \
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 42 peticiones y 99 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 46 peticiones y 107 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -130,7 +132,8 @@ En la carpeta `postman/`:
 
 La carpeta `00 - Preparacion` obtiene el token del ADMIN y crea dos propietarios en `plazoleta-usuarios`;
 luego `01 - HU-2` y `02 - Seguridad` prueban la creación de restaurantes, y `03 - HU-3` crea platos en el
-restaurante del primer propietario (el segundo se usa para comprobar el 403). `04 - HU-4` edita ese plato.
+restaurante del primer propietario (el segundo se usa para comprobar el 403). `04 - HU-4` edita ese plato y
+`05 - HU-6` consulta el restaurante por id.
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura

@@ -7,6 +7,7 @@ import com.plazoleta.plazoleta.domain.exception.InvalidRestaurantNameException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
 import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
+import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.UserIsNotOwnerException;
 import com.plazoleta.plazoleta.domain.model.Restaurant;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
@@ -45,6 +46,14 @@ public class RestaurantUseCase implements IRestaurantServicePort {
         validateOwner(restaurant.getOwnerId());
 
         return restaurantPersistencePort.saveRestaurant(restaurant);
+    }
+
+    @Override
+    public Restaurant getRestaurantById(Long restaurantId) {
+        if (restaurantId == null) {
+            throw new RequiredFieldException("idRestaurante");
+        }
+        return restaurantPersistencePort.findById(restaurantId).orElseThrow(RestaurantNotFoundException::new);
     }
 
     private void validateRequiredFields(Restaurant restaurant) {

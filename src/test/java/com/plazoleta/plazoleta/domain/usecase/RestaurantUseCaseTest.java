@@ -6,6 +6,7 @@ import com.plazoleta.plazoleta.domain.exception.InvalidRestaurantNameException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
 import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
+import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.UserIsNotOwnerException;
 import com.plazoleta.plazoleta.domain.model.Restaurant;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
@@ -208,5 +209,32 @@ class RestaurantUseCaseTest {
 
         assertThrows(RequiredFieldException.class, () -> restaurantUseCase.createRestaurant(restaurant));
         verify(userClientPort, never()).findUserRoleById(any());
+    }
+
+    // ---------- HU-6: consultar restaurante por id (lo usa usuarios al crear empleados) ----------
+
+    @Test
+    void getRestaurantById_whenRestaurantExists_returnsRestaurantWithOwner() {
+        Restaurant stored = validRestaurant();
+        stored.setId(1L);
+        when(restaurantPersistencePort.findById(1L)).thenReturn(Optional.of(stored));
+
+        Restaurant result = restaurantUseCase.getRestaurantById(1L);
+
+        assertSame(stored, result);
+        assertEquals(OWNER_ID, result.getOwnerId());
+    }
+
+    @Test
+    void getRestaurantById_whenRestaurantDoesNotExist_throwsException() {
+        when(restaurantPersistencePort.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(RestaurantNotFoundException.class, () -> restaurantUseCase.getRestaurantById(99L));
+    }
+
+    @Test
+    void getRestaurantById_withNullId_throwsException() {
+        assertThrows(RequiredFieldException.class, () -> restaurantUseCase.getRestaurantById(null));
+        verify(restaurantPersistencePort, never()).findById(any());
     }
 }
