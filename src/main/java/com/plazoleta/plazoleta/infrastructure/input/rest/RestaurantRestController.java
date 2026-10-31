@@ -15,6 +15,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -54,5 +56,24 @@ public class RestaurantRestController {
     public ResponseEntity<RestaurantResponseDto> createRestaurant(
             @Valid @RequestBody RestaurantRequestDto restaurantRequestDto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(restaurantHandler.createRestaurant(restaurantRequestDto));
+    }
+
+    @Operation(summary = "Consultar restaurante por id",
+            description = "Devuelve los datos del restaurante, incluido el id de su propietario. Lo usa el "
+                    + "microservicio de usuarios para validar que quien crea un empleado sea el dueno del restaurante.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Restaurante encontrado",
+                    content = @Content(schema = @Schema(implementation = RestaurantResponseDto.class))),
+            @ApiResponse(responseCode = "400", description = "El id no es numerico",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, invalido o expirado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No existe un restaurante con el id indicado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping("/{id}")
+    public ResponseEntity<RestaurantResponseDto> getRestaurantById(@PathVariable Long id) {
+        return ResponseEntity.ok(restaurantHandler.getRestaurantById(id));
     }
 }

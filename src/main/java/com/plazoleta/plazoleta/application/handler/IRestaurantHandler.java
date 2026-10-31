@@ -6,4 +6,6 @@ import com.plazoleta.plazoleta.application.dto.response.RestaurantResponseDto;
 public interface IRestaurantHandler {
 
     RestaurantResponseDto createRestaurant(RestaurantRequestDto restaurantRequestDto);
+
+    RestaurantResponseDto getRestaurantById(Long restaurantId);
 }

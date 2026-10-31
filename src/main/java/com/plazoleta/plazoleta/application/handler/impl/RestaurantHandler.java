@@ -24,4 +24,10 @@ public class RestaurantHandler implements IRestaurantHandler {
         return restaurantResponseMapper.toResponse(
                 restaurantServicePort.createRestaurant(restaurantRequestMapper.toRestaurant(restaurantRequestDto)));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RestaurantResponseDto getRestaurantById(Long restaurantId) {
+        return restaurantResponseMapper.toResponse(restaurantServicePort.getRestaurantById(restaurantId));
+    }
 }
