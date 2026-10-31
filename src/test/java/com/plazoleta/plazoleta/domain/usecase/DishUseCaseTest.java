@@ -27,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -318,6 +319,80 @@ class DishUseCaseTest {
     @Test
     void updateDish_withNullId_throwsException() {
         assertThrows(RequiredFieldException.class, () -> dishUseCase.updateDish(null, changes(30000, null)));
+        verify(dishPersistencePort, never()).findById(any());
+    }
+
+    // ---------- HU-7: activar / desactivar plato ----------
+
+    @Test
+    void changeDishStatus_deactivate_savesDishAsInactive() {
+        givenStoredDishOwnedByAuthenticatedUser();
+
+        Dish result = dishUseCase.changeDishStatus(DISH_ID, false);
+
+        assertFalse(result.getActive());
+        verify(dishPersistencePort).saveDish(result);
+    }
+
+    @Test
+    void changeDishStatus_activate_savesDishAsActive() {
+        Dish inactive = storedDish();
+        inactive.setActive(false);
+        when(dishPersistencePort.findById(DISH_ID)).thenReturn(Optional.of(inactive));
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(OWNER_ID);
+        when(dishPersistencePort.saveDish(any(Dish.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertTrue(dishUseCase.changeDishStatus(DISH_ID, true).getActive());
+    }
+
+    @Test
+    void changeDishStatus_withSameStatus_isIdempotent() {
+        givenStoredDishOwnedByAuthenticatedUser();
+
+        assertTrue(dishUseCase.changeDishStatus(DISH_ID, true).getActive());
+    }
+
+    @Test
+    void changeDishStatus_onlyChangesActive_keepsOtherFields() {
+        givenStoredDishOwnedByAuthenticatedUser();
+
+        Dish result = dishUseCase.changeDishStatus(DISH_ID, false);
+
+        assertEquals("Bandeja paisa", result.getName());
+        assertEquals(25000, result.getPrice());
+        assertEquals("Descripcion original", result.getDescription());
+        assertEquals(CATEGORY_ID, result.getCategoryId());
+        assertEquals(RESTAURANT_ID, result.getRestaurantId());
+    }
+
+    @Test
+    void changeDishStatus_whenUserIsNotOwnerOfRestaurant_throwsException() {
+        when(dishPersistencePort.findById(DISH_ID)).thenReturn(Optional.of(storedDish()));
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(99L);
+
+        assertThrows(NotRestaurantOwnerException.class, () -> dishUseCase.changeDishStatus(DISH_ID, false));
+        verify(dishPersistencePort, never()).saveDish(any());
+    }
+
+    @Test
+    void changeDishStatus_whenDishDoesNotExist_throwsException() {
+        when(dishPersistencePort.findById(DISH_ID)).thenReturn(Optional.empty());
+
+        assertThrows(DishNotFoundException.class, () -> dishUseCase.changeDishStatus(DISH_ID, false));
+        verify(dishPersistencePort, never()).saveDish(any());
+    }
+
+    @Test
+    void changeDishStatus_withNullActive_throwsException() {
+        assertThrows(RequiredFieldException.class, () -> dishUseCase.changeDishStatus(DISH_ID, null));
+        verify(dishPersistencePort, never()).findById(any());
+    }
+
+    @Test
+    void changeDishStatus_withNullId_throwsException() {
+        assertThrows(RequiredFieldException.class, () -> dishUseCase.changeDishStatus(null, false));
         verify(dishPersistencePort, never()).findById(any());
     }
 }
