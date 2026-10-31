@@ -1,6 +1,7 @@
 package com.plazoleta.plazoleta.infrastructure.input.rest;
 
 import com.plazoleta.plazoleta.application.dto.request.DishRequestDto;
+import com.plazoleta.plazoleta.application.dto.request.DishStatusRequestDto;
 import com.plazoleta.plazoleta.application.dto.request.DishUpdateRequestDto;
 import com.plazoleta.plazoleta.application.dto.response.DishResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
@@ -77,5 +78,28 @@ public class DishRestController {
     public ResponseEntity<DishResponseDto> updateDish(@PathVariable Long id,
                                                       @Valid @RequestBody DishUpdateRequestDto dishUpdateRequestDto) {
         return ResponseEntity.ok(dishHandler.updateDish(id, dishUpdateRequestDto));
+    }
+
+    @Operation(summary = "Activar o desactivar plato",
+            description = "Cambia el estado del plato: active=true lo habilita y active=false lo deshabilita del menu. "
+                    + "Solo el PROPIETARIO del restaurante al que pertenece el plato puede hacerlo.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado del plato actualizado",
+                    content = @Content(schema = @Schema(implementation = DishResponseDto.class))),
+            @ApiResponse(responseCode = "400", description = "No se envio el campo active o el id no es numerico",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, invalido o expirado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403",
+                    description = "El usuario no tiene rol PROPIETARIO o el plato es de otro restaurante",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No existe un plato con el id indicado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<DishResponseDto> changeDishStatus(@PathVariable Long id,
+                                                            @Valid @RequestBody DishStatusRequestDto dishStatusRequestDto) {
+        return ResponseEntity.ok(dishHandler.changeDishStatus(id, dishStatusRequestDto));
     }
 }

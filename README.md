@@ -12,6 +12,7 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 | HU-4 | Editar plato (precio y descripción) | `PATCH /dishes/{id}` | OWNER (propietario del restaurante) |
 | HU-5 | Autenticación: validación de token y rol en todos los endpoints | — | — |
 | HU-6 | Consultar restaurante por id (usado por usuarios al crear empleados) | `GET /restaurants/{id}` | Autenticado |
+| HU-7 | Activar / desactivar plato | `PATCH /dishes/{id}/status` | OWNER (propietario del restaurante) |
 
 ### Reglas de la HU-2
 
@@ -37,6 +38,13 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
 
+### Reglas de la HU-7
+
+- `PATCH /dishes/{id}/status` con `{"active": false}` deshabilita el plato y `{"active": true}` lo habilita.
+- Solo el propietario puede hacerlo (rol `OWNER`, 403 en otro caso) y solo sobre platos de **su** restaurante (403).
+- `active` es obligatorio (400); plato inexistente: 404. Enviar el mismo estado que ya tiene responde 200.
+- Es un endpoint separado de editar plato (HU-4), que sigue permitiendo solo precio y descripción.
+
 ### Reglas de la HU-5
 
 El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el JWT (firma y expiración) y el rol:
@@ -47,6 +55,7 @@ El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el
 | `POST /dishes` | OWNER, dueño del restaurante | 401 | 403 |
 | `PATCH /dishes/{id}` | OWNER, dueño del restaurante | 401 | 403 |
 | `GET /restaurants/{id}` | Cualquier usuario autenticado | 401 | — |
+| `PATCH /dishes/{id}/status` | OWNER, dueño del restaurante | 401 | 403 |
 
 `EndpointSecurityTest` verifica esta matriz con tokens reales; la regla "dueño del restaurante" se prueba en `DishUseCaseTest`.
 
@@ -117,13 +126,18 @@ curl -X POST http://localhost:8082/dishes \
 curl -X PATCH http://localhost:8082/dishes/1 \
   -H "Authorization: Bearer <TOKEN_PROPIETARIO>" -H "Content-Type: application/json" \
   -d '{"price":28000,"description":"Frijoles, arroz, carne y arepa"}'
+
+# 5. Desactivar (o activar con true) el plato
+curl -X PATCH http://localhost:8082/dishes/1/status \
+  -H "Authorization: Bearer <TOKEN_PROPIETARIO>" -H "Content-Type: application/json" \
+  -d '{"active":false}'
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 46 peticiones y 107 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 55 peticiones y 129 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -133,7 +147,7 @@ En la carpeta `postman/`:
 La carpeta `00 - Preparacion` obtiene el token del ADMIN y crea dos propietarios en `plazoleta-usuarios`;
 luego `01 - HU-2` y `02 - Seguridad` prueban la creación de restaurantes, y `03 - HU-3` crea platos en el
 restaurante del primer propietario (el segundo se usa para comprobar el 403). `04 - HU-4` edita ese plato y
-`05 - HU-6` consulta el restaurante por id.
+`05 - HU-6` consulta el restaurante por id y `06 - HU-7` desactiva y vuelve a activar el plato.
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura

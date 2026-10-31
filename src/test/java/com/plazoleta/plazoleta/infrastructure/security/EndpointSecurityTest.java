@@ -156,6 +156,33 @@ class EndpointSecurityTest {
                 .andExpect(status().isOk());
     }
 
+    // ---------- PATCH /dishes/{id}/status: solo OWNER (HU-7) ----------
+
+    private static final String DISH_STATUS_BODY = "{\"active\":false}";
+
+    @Test
+    void changeDishStatus_withoutToken_returns401() throws Exception {
+        mockMvc.perform(patch("/dishes/1/status").contentType(MediaType.APPLICATION_JSON).content(DISH_STATUS_BODY))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "EMPLOYEE", "CLIENT"})
+    void changeDishStatus_withNonOwnerRole_returns403(String role) throws Exception {
+        mockMvc.perform(patch("/dishes/1/status").header(HttpHeaders.AUTHORIZATION, bearer(role))
+                        .contentType(MediaType.APPLICATION_JSON).content(DISH_STATUS_BODY))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void changeDishStatus_withOwnerRole_returns200() throws Exception {
+        when(dishHandler.changeDishStatus(anyLong(), any())).thenReturn(new DishResponseDto());
+
+        mockMvc.perform(patch("/dishes/1/status").header(HttpHeaders.AUTHORIZATION, bearer("OWNER"))
+                        .contentType(MediaType.APPLICATION_JSON).content(DISH_STATUS_BODY))
+                .andExpect(status().isOk());
+    }
+
     // ---------- GET /restaurants/{id}: cualquier usuario autenticado (HU-6) ----------
 
     @Test
