@@ -79,6 +79,23 @@ public class DishUseCase implements IDishServicePort {
         return dishPersistencePort.saveDish(dish);
     }
 
+    @Override
+    public Dish changeDishStatus(Long dishId, Boolean active) {
+        if (dishId == null) {
+            throw new RequiredFieldException("idPlato");
+        }
+        if (active == null) {
+            throw new RequiredFieldException("activo");
+        }
+
+        Dish dish = dishPersistencePort.findById(dishId).orElseThrow(DishNotFoundException::new);
+        // No se permite modificar platos de restaurantes de otro propietario.
+        validateRestaurantOwner(dish.getRestaurantId());
+
+        dish.setActive(active);
+        return dishPersistencePort.saveDish(dish);
+    }
+
     private void validateRestaurantOwner(Long restaurantId) {
         Restaurant restaurant = restaurantPersistencePort.findById(restaurantId)
                 .orElseThrow(RestaurantNotFoundException::new);
