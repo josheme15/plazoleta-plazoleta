@@ -6,4 +6,9 @@ package com.plazoleta.plazoleta.domain.spi;
 public interface IAuthenticatedUserPort {
 
     Long getAuthenticatedUserId();
+
+    /**
+     * @return el restaurante al que pertenece el usuario (solo empleados), o {@code null} si no tiene.
+     */
+    Long getAuthenticatedRestaurantId();
 }

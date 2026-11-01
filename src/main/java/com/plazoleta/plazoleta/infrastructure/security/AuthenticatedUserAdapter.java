@@ -6,16 +6,28 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * Obtiene el id del usuario autenticado desde el contexto de seguridad (lo carga JwtAuthenticationFilter).
+ * Obtiene los datos del usuario autenticado desde el contexto de seguridad (lo carga JwtAuthenticationFilter).
  */
 public class AuthenticatedUserAdapter implements IAuthenticatedUserPort {
 
     @Override
     public Long getAuthenticatedUserId() {
+        Long id = currentUser().id();
+        if (id == null) {
+            throw new AuthenticationCredentialsNotFoundException("No hay un usuario autenticado en la peticion");
+        }
+        return id;
+    }
+
+    @Override
+    public Long getAuthenticatedRestaurantId() {
+        return currentUser().restaurantId();
+    }
+
+    private AuthenticatedUser currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUser user
-                && user.id() != null) {
-            return user.id();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUser user) {
+            return user;
         }
         throw new AuthenticationCredentialsNotFoundException("No hay un usuario autenticado en la peticion");
     }

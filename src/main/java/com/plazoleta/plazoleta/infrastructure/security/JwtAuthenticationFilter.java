@@ -35,8 +35,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 Claims claims = jwtService.parseClaims(token);
                 String role = claims.get(JwtService.CLAIM_ROLE, String.class);
-                AuthenticatedUser principal =
-                        new AuthenticatedUser(claims.get(JwtService.CLAIM_USER_ID, Long.class), claims.getSubject());
+                AuthenticatedUser principal = new AuthenticatedUser(
+                        claims.get(JwtService.CLAIM_USER_ID, Long.class), claims.getSubject(),
+                        claims.get(JwtService.CLAIM_RESTAURANT_ID, Long.class));
                 // El token se guarda como credencial para reenviarlo a otros microservicios.
                 var authentication = new UsernamePasswordAuthenticationToken(
                         principal, token, List.of(new SimpleGrantedAuthority(ROLE_PREFIX + role)));
