@@ -2,12 +2,16 @@ package com.plazoleta.plazoleta.infrastructure.security;
 
 import com.plazoleta.plazoleta.application.dto.response.DishMenuItemResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.DishResponseDto;
+import com.plazoleta.plazoleta.application.dto.response.OrderDishResponseDto;
+import com.plazoleta.plazoleta.application.dto.response.OrderResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.RestaurantListItemResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.RestaurantResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
+import com.plazoleta.plazoleta.application.handler.IOrderHandler;
 import com.plazoleta.plazoleta.application.handler.IRestaurantHandler;
 import com.plazoleta.plazoleta.infrastructure.input.rest.DishRestController;
+import com.plazoleta.plazoleta.infrastructure.input.rest.OrderRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantMenuRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantRestController;
 import io.jsonwebtoken.Jwts;
@@ -43,7 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * La validacion "es el propietario de ESE restaurante" se prueba en DishUseCaseTest.
  */
 @WebMvcTest(controllers = {RestaurantRestController.class, DishRestController.class,
-        RestaurantMenuRestController.class})
+        RestaurantMenuRestController.class, OrderRestController.class})
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtService.class})
 @TestPropertySource(properties = "security.jwt.secret=" + EndpointSecurityTest.SECRET)
 class EndpointSecurityTest {
@@ -66,6 +70,9 @@ class EndpointSecurityTest {
 
     @MockitoBean
     private IDishHandler dishHandler;
+
+    @MockitoBean
+    private IOrderHandler orderHandler;
 
     /** Token firmado con la misma clave que usa plazoleta-usuarios. */
     private String bearer(String role) {
@@ -279,6 +286,51 @@ class EndpointSecurityTest {
     void listDishesByRestaurant_withNonNumericCategory_returns400() throws Exception {
         mockMvc.perform(get("/restaurants/1/dishes").param("categoryId", "abc")
                         .header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ---------- POST /orders: solo CLIENT (HU-11) ----------
+
+    private static final String ORDER_BODY = "{\"restaurantId\":1,\"dishes\":[{\"dishId\":5,\"quantity\":2}]}";
+
+    @Test
+    void createOrder_withoutToken_returns401() throws Exception {
+        mockMvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(ORDER_BODY))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "EMPLOYEE"})
+    void createOrder_withNonClientRole_returns403(String role) throws Exception {
+        mockMvc.perform(post("/orders").header(HttpHeaders.AUTHORIZATION, bearer(role))
+                        .contentType(MediaType.APPLICATION_JSON).content(ORDER_BODY))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void createOrder_withClientRole_returns201() throws Exception {
+        when(orderHandler.createOrder(any())).thenReturn(new OrderResponseDto(1L, 1L, "PENDIENTE", null,
+                List.of(new OrderDishResponseDto(5L, 2))));
+
+        mockMvc.perform(post("/orders").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT"))
+                        .contentType(MediaType.APPLICATION_JSON).content(ORDER_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDIENTE"))
+                .andExpect(jsonPath("$.dishes[0].quantity").value(2));
+    }
+
+    @Test
+    void createOrder_withEmptyDishList_returns400() throws Exception {
+        mockMvc.perform(post("/orders").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"restaurantId\":1,\"dishes\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createOrder_withZeroQuantity_returns400() throws Exception {
+        mockMvc.perform(post("/orders").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"restaurantId\":1,\"dishes\":[{\"dishId\":5,\"quantity\":0}]}"))
                 .andExpect(status().isBadRequest());
     }
 

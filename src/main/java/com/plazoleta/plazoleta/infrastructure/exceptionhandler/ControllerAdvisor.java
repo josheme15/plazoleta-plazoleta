@@ -1,6 +1,7 @@
 package com.plazoleta.plazoleta.infrastructure.exceptionhandler;
 
 import com.plazoleta.plazoleta.domain.exception.CategoryNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.ClientHasActiveOrderException;
 import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DomainException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
@@ -21,8 +22,8 @@ import java.util.List;
 @RestControllerAdvice
 public class ControllerAdvisor {
 
-    @ExceptionHandler(NitAlreadyExistsException.class)
-    public ResponseEntity<ErrorResponse> handleConflict(NitAlreadyExistsException ex) {
+    @ExceptionHandler({NitAlreadyExistsException.class, ClientHasActiveOrderException.class})
+    public ResponseEntity<ErrorResponse> handleConflict(DomainException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
 
