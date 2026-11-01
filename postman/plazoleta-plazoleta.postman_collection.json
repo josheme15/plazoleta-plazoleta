@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Plazoleta - Plazoleta",
-    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere ambos microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d).\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 -> 05 HU-6 -> 06 HU-7 -> 07 HU-9 (usar el Collection Runner).",
+    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere ambos microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d).\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 -> 05 HU-6 -> 06 HU-7 -> 07 HU-9 -> 08 HU-10 (usar el Collection Runner).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -3692,6 +3692,764 @@
           ]
         }
       ]
+    },
+    {
+      "name": "08 - HU-10 Platos por restaurante",
+      "description": "GET /restaurants/{id}/dishes?categoryId=&page=&size=. Solo rol CLIENTE ({{clientToken}} de la carpeta 07). Muestra solo platos activos, paginados y ordenados por nombre; categoryId es opcional.",
+      "item": [
+        {
+          "name": "Preparacion: crear postre (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/dishes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postre de natas\",\n  \"price\": 8000,\n  \"description\": \"Postre tipico\",\n  \"urlImage\": \"https://misitio.com/natas.png\",\n  \"categoryId\": 3,\n  \"restaurantId\": {{restaurantId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparacion: crear plato que se desactivara (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/dishes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Plato no disponible\",\n  \"price\": 15000,\n  \"description\": \"Se desactiva para probar el menu\",\n  \"urlImage\": \"https://misitio.com/no.png\",\n  \"categoryId\": 2,\n  \"restaurantId\": {{restaurantId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"inactiveDishId\", pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparacion: desactivar ese plato (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/dishes/{{inactiveDishId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dishes",
+                "{{inactiveDishId}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Menu completo sin filtro (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const names = body.content.map((d) => d.name);",
+                  "const key = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, \"\");",
+                  "pm.test(\"Trae los platos activos del restaurante\", () => {",
+                  "    pm.expect(names).to.include(\"Bandeja paisa\");",
+                  "    pm.expect(names).to.include(\"Limonada de coco\");",
+                  "    pm.expect(names).to.include(\"Postre de natas\");",
+                  "});",
+                  "pm.test(\"No muestra platos desactivados\", () => pm.expect(names).to.not.include(\"Plato no disponible\"));",
+                  "pm.test(\"Campos de cada plato\", () => {",
+                  "    body.content.forEach((d) => pm.expect(Object.keys(d).sort()).to.eql([\"categoryId\", \"description\", \"id\", \"name\", \"price\", \"urlImage\"]));",
+                  "});",
+                  "pm.test(\"Ordenados por nombre\", () => {",
+                  "    for (let i = 1; i < names.length; i++) pm.expect(key(names[i - 1]) <= key(names[i])).to.eql(true);",
+                  "});",
+                  "pm.test(\"Paginacion por defecto\", () => {",
+                  "    pm.expect(body.page).to.eql(0);",
+                  "    pm.expect(body.size).to.eql(10);",
+                  "});",
+                  "pm.collectionVariables.set(\"menuTotal\", body.totalElements);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filtrar por categoria 2 - Platos fuertes (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes?categoryId=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "2"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Todos son de la categoria 2\", () => body.content.forEach((d) => pm.expect(d.categoryId).to.eql(2)));",
+                  "pm.test(\"Incluye Bandeja paisa y excluye el plato desactivado\", () => {",
+                  "    const names = body.content.map((d) => d.name);",
+                  "    pm.expect(names).to.include(\"Bandeja paisa\");",
+                  "    pm.expect(names).to.not.include(\"Plato no disponible\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filtrar por categoria 3 - Postres (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes?categoryId=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "3"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Solo postres\", () => {",
+                  "    pm.expect(body.content.length).to.be.at.least(1);",
+                  "    body.content.forEach((d) => pm.expect(d.categoryId).to.eql(3));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Categoria sin platos en este restaurante - 5 (200 vacio)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes?categoryId=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Lista vacia\", () => {",
+                  "    pm.expect(pm.response.json().content.length).to.eql(0);",
+                  "    pm.expect(pm.response.json().totalElements).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paginar: 1 plato por pagina, pagina 0 (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes?page=0&size=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Un plato por pagina\", () => pm.expect(body.content.length).to.eql(1));",
+                  "pm.test(\"Total de paginas = total de platos\", () => {",
+                  "    pm.expect(body.totalPages).to.eql(body.totalElements);",
+                  "    pm.expect(body.totalElements).to.eql(Number(pm.collectionVariables.get(\"menuTotal\")));",
+                  "});",
+                  "pm.collectionVariables.set(\"firstMenuDish\", body.content[0].name);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paginar: pagina 1 trae otro plato (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes?page=1&size=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Es la pagina 1 con un plato distinto\", () => {",
+                  "    pm.expect(body.page).to.eql(1);",
+                  "    pm.expect(body.content.length).to.eql(1);",
+                  "    pm.expect(body.content[0].name).to.not.eql(pm.collectionVariables.get(\"firstMenuDish\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Categoria inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes?categoryId=999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "999"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"status\", 404);",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de categoria inexistente\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"No existe una categoria con el id indicado\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Restaurante inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/999999999/dishes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "999999999",
+                "dishes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"status\", 404);",
+                  "});",
+                  "",
+                  "pm.test(\"Mensaje de restaurante inexistente\", () => {",
+                  "    pm.expect(pm.response.json().message).to.eql(\"No existe un restaurante con el id indicado\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "size en 0 (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes?size=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"status\", 400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "categoryId no numerico (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes?categoryId=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "abc"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"status\", 400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PROPIETARIO intenta ver el menu (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"status\", 403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/restaurants/{{restaurantId}}/dishes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "restaurants",
+                "{{restaurantId}}",
+                "dishes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Respuesta con formato de error estandar\", () => {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"status\", 401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -3757,6 +4515,18 @@
     },
     {
       "key": "lastRestaurantName",
+      "value": ""
+    },
+    {
+      "key": "inactiveDishId",
+      "value": ""
+    },
+    {
+      "key": "menuTotal",
+      "value": ""
+    },
+    {
+      "key": "firstMenuDish",
       "value": ""
     }
   ]
