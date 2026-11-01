@@ -4,6 +4,7 @@ import com.plazoleta.plazoleta.domain.exception.CategoryNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.ClientHasActiveOrderException;
 import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DomainException;
+import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
 import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
@@ -33,8 +34,8 @@ public class ControllerAdvisor {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler(NotRestaurantOwnerException.class)
-    public ResponseEntity<ErrorResponse> handleNotRestaurantOwner(NotRestaurantOwnerException ex) {
+    @ExceptionHandler({NotRestaurantOwnerException.class, EmployeeWithoutRestaurantException.class})
+    public ResponseEntity<ErrorResponse> handleNotRestaurantOwner(DomainException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 

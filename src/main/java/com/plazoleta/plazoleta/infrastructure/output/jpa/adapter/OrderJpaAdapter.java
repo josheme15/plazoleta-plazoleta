@@ -3,6 +3,7 @@ package com.plazoleta.plazoleta.infrastructure.output.jpa.adapter;
 import com.plazoleta.plazoleta.domain.model.Order;
 import com.plazoleta.plazoleta.domain.model.OrderDish;
 import com.plazoleta.plazoleta.domain.model.OrderStatus;
+import com.plazoleta.plazoleta.domain.model.PageResult;
 import com.plazoleta.plazoleta.domain.spi.IOrderPersistencePort;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.entity.OrderDishEntity;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.entity.OrderEntity;
@@ -10,6 +11,9 @@ import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IDishReposit
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IOrderRepository;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IRestaurantRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 
@@ -41,6 +45,17 @@ public class OrderJpaAdapter implements IOrderPersistencePort {
     @Override
     public boolean existsByClientIdAndStatusIn(Long clientId, List<OrderStatus> statuses) {
         return orderRepository.existsByClientIdAndStatusIn(clientId, statuses);
+    }
+
+    @Override
+    public PageResult<Order> findByRestaurant(Long restaurantId, OrderStatus status, int page, int size) {
+        // Del mas antiguo al mas reciente; el id desempata pedidos con la misma fecha.
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Order.asc("date"), Sort.Order.asc("id")));
+        Page<OrderEntity> result = status == null
+                ? orderRepository.findByRestaurant_Id(restaurantId, pageRequest)
+                : orderRepository.findByRestaurant_IdAndStatus(restaurantId, status, pageRequest);
+        return new PageResult<>(result.getContent().stream().map(this::toOrder).toList(),
+                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     private Order toOrder(OrderEntity entity) {

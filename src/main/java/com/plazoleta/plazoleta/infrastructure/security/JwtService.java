@@ -17,6 +17,8 @@ public class JwtService {
 
     public static final String CLAIM_ROLE = "role";
     public static final String CLAIM_USER_ID = "id";
+    // Solo viene en el token de los empleados (lo agrega plazoleta-usuarios al iniciar sesion).
+    public static final String CLAIM_RESTAURANT_ID = "restaurantId";
 
     private final SecretKey key;
 

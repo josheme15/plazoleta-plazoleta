@@ -40,6 +40,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/restaurants/*/dishes").hasRole("CLIENT")
                         // HU-11: solo el cliente realiza pedidos.
                         .requestMatchers(HttpMethod.POST, "/orders").hasRole("CLIENT")
+                        // HU-12: el empleado lista los pedidos de su restaurante.
+                        .requestMatchers(HttpMethod.GET, "/orders").hasRole("EMPLOYEE")
                         .requestMatchers(HttpMethod.POST, "/dishes").hasRole("OWNER")
                         .requestMatchers(HttpMethod.PATCH, "/dishes/*").hasRole("OWNER")
                         .requestMatchers(HttpMethod.PATCH, "/dishes/*/status").hasRole("OWNER")
