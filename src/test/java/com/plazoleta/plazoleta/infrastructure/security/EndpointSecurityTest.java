@@ -10,6 +10,7 @@ import com.plazoleta.plazoleta.application.dto.response.RestaurantResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
 import com.plazoleta.plazoleta.application.handler.IOrderHandler;
 import com.plazoleta.plazoleta.application.handler.IRestaurantHandler;
+import com.plazoleta.plazoleta.domain.model.OrderStatus;
 import com.plazoleta.plazoleta.infrastructure.input.rest.DishRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.OrderRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantMenuRestController;
@@ -309,7 +310,7 @@ class EndpointSecurityTest {
 
     @Test
     void createOrder_withClientRole_returns201() throws Exception {
-        when(orderHandler.createOrder(any())).thenReturn(new OrderResponseDto(1L, 1L, "PENDIENTE", null,
+        when(orderHandler.createOrder(any())).thenReturn(new OrderResponseDto(1L, 2L, 1L, null, "PENDIENTE", null,
                 List.of(new OrderDishResponseDto(5L, 2))));
 
         mockMvc.perform(post("/orders").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT"))
@@ -331,6 +332,55 @@ class EndpointSecurityTest {
         mockMvc.perform(post("/orders").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"restaurantId\":1,\"dishes\":[{\"dishId\":5,\"quantity\":0}]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ---------- GET /orders: solo EMPLOYEE (HU-12) ----------
+
+    @Test
+    void listRestaurantOrders_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/orders")).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "CLIENT"})
+    void listRestaurantOrders_withNonEmployeeRole_returns403(String role) throws Exception {
+        mockMvc.perform(get("/orders").header(HttpHeaders.AUTHORIZATION, bearer(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listRestaurantOrders_withEmployeeRole_returnsAllOrderFields() throws Exception {
+        when(orderHandler.listRestaurantOrders(null, 0, 10)).thenReturn(new PageResponseDto<>(List.of(
+                new OrderResponseDto(1L, 30L, 10L, null, "PENDIENTE", null, List.of(new OrderDishResponseDto(5L, 2)))),
+                0, 10, 1, 1));
+
+        mockMvc.perform(get("/orders").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(1))
+                .andExpect(jsonPath("$.content[0].clientId").value(30))
+                .andExpect(jsonPath("$.content[0].restaurantId").value(10))
+                .andExpect(jsonPath("$.content[0].status").value("PENDIENTE"))
+                .andExpect(jsonPath("$.content[0].dishes[0].dishId").value(5))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void listRestaurantOrders_passesStatusAndPaginationParameters() throws Exception {
+        when(orderHandler.listRestaurantOrders(OrderStatus.LISTO, 1, 5))
+                .thenReturn(new PageResponseDto<>(List.of(), 1, 5, 0, 0));
+
+        mockMvc.perform(get("/orders").param("status", "LISTO").param("page", "1").param("size", "5")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.size").value(5));
+    }
+
+    @Test
+    void listRestaurantOrders_withInvalidStatus_returns400() throws Exception {
+        mockMvc.perform(get("/orders").param("status", "INVENTADO")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
                 .andExpect(status().isBadRequest());
     }
 

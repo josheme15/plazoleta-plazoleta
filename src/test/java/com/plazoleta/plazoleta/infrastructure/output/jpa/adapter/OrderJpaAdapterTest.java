@@ -3,6 +3,7 @@ package com.plazoleta.plazoleta.infrastructure.output.jpa.adapter;
 import com.plazoleta.plazoleta.domain.model.Order;
 import com.plazoleta.plazoleta.domain.model.OrderDish;
 import com.plazoleta.plazoleta.domain.model.OrderStatus;
+import com.plazoleta.plazoleta.domain.model.PageResult;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.entity.DishEntity;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.entity.OrderDishEntity;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.entity.OrderEntity;
@@ -16,6 +17,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,6 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -99,5 +106,54 @@ class OrderJpaAdapterTest {
         when(orderRepository.existsByClientIdAndStatusIn(30L, OrderStatus.IN_PROCESS)).thenReturn(true);
 
         assertTrue(adapter.existsByClientIdAndStatusIn(30L, OrderStatus.IN_PROCESS));
+    }
+
+    // ---------- HU-12 ----------
+
+    private OrderEntity savedOrderEntity() {
+        OrderEntity entity = new OrderEntity();
+        entity.setId(100L);
+        entity.setClientId(30L);
+        entity.setDate(DATE);
+        entity.setStatus(OrderStatus.PENDIENTE);
+        entity.setRestaurant(restaurant(10L));
+        OrderDishEntity item = new OrderDishEntity();
+        item.setOrder(entity);
+        item.setDish(dish(1L));
+        item.setQuantity(3);
+        entity.getDishes().add(item);
+        return entity;
+    }
+
+    @Test
+    void findByRestaurant_withoutStatus_queriesAllOrdersSortedFromOldest() {
+        when(orderRepository.findByRestaurant_Id(eq(10L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(savedOrderEntity()), PageRequest.of(0, 10), 1));
+
+        PageResult<Order> result = adapter.findByRestaurant(10L, null, 0, 10);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(orderRepository).findByRestaurant_Id(eq(10L), captor.capture());
+        verify(orderRepository, never()).findByRestaurant_IdAndStatus(any(), any(), any());
+        Sort.Order byDate = captor.getValue().getSort().getOrderFor("date");
+        assertTrue(byDate != null && byDate.isAscending());
+        assertEquals(1, result.getTotalElements());
+        Order order = result.getContent().get(0);
+        assertEquals(100L, order.getId());
+        assertEquals(30L, order.getClientId());
+        assertEquals(10L, order.getRestaurantId());
+        assertEquals(3, order.getDishes().get(0).getQuantity());
+    }
+
+    @Test
+    void findByRestaurant_withStatus_queriesByStatus() {
+        when(orderRepository.findByRestaurant_IdAndStatus(eq(10L), eq(OrderStatus.LISTO), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        PageResult<Order> result = adapter.findByRestaurant(10L, OrderStatus.LISTO, 1, 5);
+
+        verify(orderRepository).findByRestaurant_IdAndStatus(eq(10L), eq(OrderStatus.LISTO), any(Pageable.class));
+        verify(orderRepository, never()).findByRestaurant_Id(any(), any());
+        assertEquals(0, result.getContent().size());
     }
 }
