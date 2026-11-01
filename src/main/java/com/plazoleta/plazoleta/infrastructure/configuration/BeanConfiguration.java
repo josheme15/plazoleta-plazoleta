@@ -18,12 +18,19 @@ import com.plazoleta.plazoleta.infrastructure.output.jpa.mapper.IRestaurantEntit
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.ICategoryRepository;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IDishRepository;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IRestaurantRepository;
+import com.plazoleta.plazoleta.domain.api.IOrderServicePort;
+import com.plazoleta.plazoleta.domain.spi.IOrderPersistencePort;
+import com.plazoleta.plazoleta.domain.usecase.OrderUseCase;
+import com.plazoleta.plazoleta.infrastructure.output.jpa.adapter.OrderJpaAdapter;
+import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IOrderRepository;
 import com.plazoleta.plazoleta.infrastructure.security.AuthenticatedUserAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
+
+import java.time.Clock;
 
 @Configuration
 @RequiredArgsConstructor
@@ -34,6 +41,7 @@ public class BeanConfiguration {
     private final IDishRepository dishRepository;
     private final IDishEntityMapper dishEntityMapper;
     private final ICategoryRepository categoryRepository;
+    private final IOrderRepository orderRepository;
 
     @Value("${clients.usuarios.url}")
     private String usuariosUrl;
@@ -77,5 +85,21 @@ public class BeanConfiguration {
     public IDishServicePort dishServicePort() {
         return new DishUseCase(dishPersistencePort(), restaurantPersistencePort(), categoryPersistencePort(),
                 authenticatedUserPort());
+    }
+
+    @Bean
+    public Clock clock() {
+        return Clock.systemDefaultZone();
+    }
+
+    @Bean
+    public IOrderPersistencePort orderPersistencePort() {
+        return new OrderJpaAdapter(orderRepository, restaurantRepository, dishRepository);
+    }
+
+    @Bean
+    public IOrderServicePort orderServicePort() {
+        return new OrderUseCase(orderPersistencePort(), restaurantPersistencePort(), dishPersistencePort(),
+                authenticatedUserPort(), clock());
     }
 }
