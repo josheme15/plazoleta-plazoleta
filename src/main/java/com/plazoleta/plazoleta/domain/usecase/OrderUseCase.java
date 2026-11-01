@@ -6,6 +6,8 @@ import com.plazoleta.plazoleta.domain.exception.DishFromAnotherRestaurantExcepti
 import com.plazoleta.plazoleta.domain.exception.DishNotAvailableException;
 import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DuplicateDishInOrderException;
+import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
+import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidQuantityException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
@@ -13,6 +15,7 @@ import com.plazoleta.plazoleta.domain.model.Dish;
 import com.plazoleta.plazoleta.domain.model.Order;
 import com.plazoleta.plazoleta.domain.model.OrderDish;
 import com.plazoleta.plazoleta.domain.model.OrderStatus;
+import com.plazoleta.plazoleta.domain.model.PageResult;
 import com.plazoleta.plazoleta.domain.spi.IAuthenticatedUserPort;
 import com.plazoleta.plazoleta.domain.spi.IDishPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IOrderPersistencePort;
@@ -61,6 +64,19 @@ public class OrderUseCase implements IOrderServicePort {
         order.setDate(LocalDateTime.now(clock));
         order.setEmployeeId(null);
         return orderPersistencePort.saveOrder(order);
+    }
+
+    @Override
+    public PageResult<Order> listRestaurantOrders(OrderStatus status, Integer page, Integer size) {
+        if (page == null || size == null || page < 0 || size <= 0) {
+            throw new InvalidPaginationException();
+        }
+        // El restaurante sale del token del empleado: solo puede ver los pedidos de su restaurante.
+        Long restaurantId = authenticatedUserPort.getAuthenticatedRestaurantId();
+        if (restaurantId == null) {
+            throw new EmployeeWithoutRestaurantException();
+        }
+        return orderPersistencePort.findByRestaurant(restaurantId, status, page, size);
     }
 
     private void validateRequestData(Order order) {
