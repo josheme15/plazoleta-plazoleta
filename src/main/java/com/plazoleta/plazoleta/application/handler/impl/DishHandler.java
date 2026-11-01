@@ -3,11 +3,14 @@ package com.plazoleta.plazoleta.application.handler.impl;
 import com.plazoleta.plazoleta.application.dto.request.DishRequestDto;
 import com.plazoleta.plazoleta.application.dto.request.DishStatusRequestDto;
 import com.plazoleta.plazoleta.application.dto.request.DishUpdateRequestDto;
+import com.plazoleta.plazoleta.application.dto.response.DishMenuItemResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.DishResponseDto;
+import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
 import com.plazoleta.plazoleta.application.mapper.IDishRequestMapper;
 import com.plazoleta.plazoleta.application.mapper.IDishResponseMapper;
 import com.plazoleta.plazoleta.domain.api.IDishServicePort;
+import com.plazoleta.plazoleta.domain.model.PageResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,5 +39,16 @@ public class DishHandler implements IDishHandler {
     public DishResponseDto changeDishStatus(Long dishId, DishStatusRequestDto dishStatusRequestDto) {
         return dishResponseMapper.toResponse(
                 dishServicePort.changeDishStatus(dishId, dishStatusRequestDto.getActive()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponseDto<DishMenuItemResponseDto> listDishesByRestaurant(Long restaurantId, Long categoryId,
+                                                                           Integer page, Integer size) {
+        PageResult<DishMenuItemResponseDto> result = dishServicePort
+                .listDishesByRestaurant(restaurantId, categoryId, page, size)
+                .map(dishResponseMapper::toMenuItem);
+        return new PageResponseDto<>(result.getContent(), result.getPage(), result.getSize(),
+                result.getTotalElements(), result.getTotalPages());
     }
 }

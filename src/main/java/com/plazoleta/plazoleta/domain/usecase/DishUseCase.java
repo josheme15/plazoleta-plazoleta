@@ -4,12 +4,14 @@ import com.plazoleta.plazoleta.domain.api.IDishServicePort;
 import com.plazoleta.plazoleta.domain.exception.CategoryNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.InvalidDescriptionException;
+import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPriceException;
 import com.plazoleta.plazoleta.domain.exception.NoDishFieldsToUpdateException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.domain.model.Dish;
+import com.plazoleta.plazoleta.domain.model.PageResult;
 import com.plazoleta.plazoleta.domain.model.Restaurant;
 import com.plazoleta.plazoleta.domain.spi.IAuthenticatedUserPort;
 import com.plazoleta.plazoleta.domain.spi.ICategoryPersistencePort;
@@ -94,6 +96,24 @@ public class DishUseCase implements IDishServicePort {
 
         dish.setActive(active);
         return dishPersistencePort.saveDish(dish);
+    }
+
+    @Override
+    public PageResult<Dish> listDishesByRestaurant(Long restaurantId, Long categoryId, Integer page, Integer size) {
+        if (restaurantId == null) {
+            throw new RequiredFieldException("idRestaurante");
+        }
+        if (page == null || size == null || page < 0 || size <= 0) {
+            throw new InvalidPaginationException();
+        }
+        if (restaurantPersistencePort.findById(restaurantId).isEmpty()) {
+            throw new RestaurantNotFoundException();
+        }
+        if (categoryId != null && !categoryPersistencePort.existsById(categoryId)) {
+            throw new CategoryNotFoundException();
+        }
+        // El cliente solo ve los platos disponibles (activos), segun la HU-7.
+        return dishPersistencePort.findActiveByRestaurant(restaurantId, categoryId, page, size);
     }
 
     private void validateRestaurantOwner(Long restaurantId) {

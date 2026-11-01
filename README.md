@@ -14,6 +14,7 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 | HU-6 | Consultar restaurante por id (usado por usuarios al crear empleados) | `GET /restaurants/{id}` | Autenticado |
 | HU-7 | Activar / desactivar plato | `PATCH /dishes/{id}/status` | OWNER (propietario del restaurante) |
 | HU-9 | Listar restaurantes | `GET /restaurants?page=0&size=10` | CLIENT |
+| HU-10 | Platos por restaurante (menú) | `GET /restaurants/{id}/dishes?categoryId=2&page=0&size=10` | CLIENT |
 
 ### Reglas de la HU-2
 
@@ -38,6 +39,16 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-10
+
+- Solo el rol `CLIENT` puede ver el menú (403 con otro rol, 401 sin token).
+- Lista los platos **del restaurante** indicado en la URL (404 si el restaurante no existe).
+- **Filtro por categoría** opcional con `categoryId` (404 si la categoría no existe; lista vacía si el
+  restaurante no tiene platos de esa categoría).
+- **Paginado** con `size` (platos por página) y `page` (desde 0); mismas reglas que la HU-9.
+- Solo se muestran platos **activos** (los desactivados en la HU-7 no aparecen), ordenados por nombre.
+- Cada plato devuelve `id`, `name`, `price`, `description`, `urlImage` y `categoryId`.
 
 ### Reglas de la HU-9
 
@@ -74,6 +85,7 @@ El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el
 | `GET /restaurants/{id}` | Cualquier usuario autenticado | 401 | — |
 | `PATCH /dishes/{id}/status` | OWNER, dueño del restaurante | 401 | 403 |
 | `GET /restaurants` | CLIENT | 401 | 403 |
+| `GET /restaurants/{id}/dishes` | CLIENT | 401 | 403 |
 
 `EndpointSecurityTest` verifica esta matriz con tokens reales; la regla "dueño del restaurante" se prueba en `DishUseCaseTest`.
 
@@ -152,13 +164,16 @@ curl -X PATCH http://localhost:8082/dishes/1/status \
 
 # 6. Listar restaurantes como CLIENTE (registro en POST /users/client y login en usuarios)
 curl "http://localhost:8082/restaurants?page=0&size=10" -H "Authorization: Bearer <TOKEN_CLIENTE>"
+
+# 7. Ver el menu de un restaurante (opcional: filtrar por categoria)
+curl "http://localhost:8082/restaurants/1/dishes?categoryId=2&page=0&size=10" -H "Authorization: Bearer <TOKEN_CLIENTE>"
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 66 peticiones y 153 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 81 peticiones y 188 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -170,6 +185,7 @@ luego `01 - HU-2` y `02 - Seguridad` prueban la creación de restaurantes, y `03
 restaurante del primer propietario (el segundo se usa para comprobar el 403). `04 - HU-4` edita ese plato y
 `05 - HU-6` consulta el restaurante por id y `06 - HU-7` desactiva y vuelve a activar el plato.
 `07 - HU-9` registra un cliente en usuarios y lista los restaurantes paginados.
+`08 - HU-10` crea un postre y un plato desactivado, y consulta el menú con y sin filtro de categoría.
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
