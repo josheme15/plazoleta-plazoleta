@@ -13,6 +13,7 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 | HU-5 | Autenticación: validación de token y rol en todos los endpoints | — | — |
 | HU-6 | Consultar restaurante por id (usado por usuarios al crear empleados) | `GET /restaurants/{id}` | Autenticado |
 | HU-7 | Activar / desactivar plato | `PATCH /dishes/{id}/status` | OWNER (propietario del restaurante) |
+| HU-9 | Listar restaurantes | `GET /restaurants?page=0&size=10` | CLIENT |
 
 ### Reglas de la HU-2
 
@@ -38,6 +39,22 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
 
+### Reglas de la HU-9
+
+- Solo el rol `CLIENT` puede listar restaurantes (403 con otro rol, 401 sin token).
+- Orden **alfabético** por nombre, sin distinguir mayúsculas de minúsculas.
+- Paginado: `size` indica cuántos restaurantes por página y `page` qué página (desde 0).
+  Por defecto `page=0` y `size=10`; `page` negativo o `size` menor o igual a 0 responden 400.
+- Cada restaurante devuelve **solo** `name` y `urlLogo`. La respuesta incluye además `page`, `size`,
+  `totalElements` y `totalPages`.
+
+```json
+{
+  "content": [ { "name": "Burger House", "urlLogo": "https://misitio.com/logo1.png" } ],
+  "page": 0, "size": 10, "totalElements": 1, "totalPages": 1
+}
+```
+
 ### Reglas de la HU-7
 
 - `PATCH /dishes/{id}/status` con `{"active": false}` deshabilita el plato y `{"active": true}` lo habilita.
@@ -56,6 +73,7 @@ El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el
 | `PATCH /dishes/{id}` | OWNER, dueño del restaurante | 401 | 403 |
 | `GET /restaurants/{id}` | Cualquier usuario autenticado | 401 | — |
 | `PATCH /dishes/{id}/status` | OWNER, dueño del restaurante | 401 | 403 |
+| `GET /restaurants` | CLIENT | 401 | 403 |
 
 `EndpointSecurityTest` verifica esta matriz con tokens reales; la regla "dueño del restaurante" se prueba en `DishUseCaseTest`.
 
@@ -131,13 +149,16 @@ curl -X PATCH http://localhost:8082/dishes/1 \
 curl -X PATCH http://localhost:8082/dishes/1/status \
   -H "Authorization: Bearer <TOKEN_PROPIETARIO>" -H "Content-Type: application/json" \
   -d '{"active":false}'
+
+# 6. Listar restaurantes como CLIENTE (registro en POST /users/client y login en usuarios)
+curl "http://localhost:8082/restaurants?page=0&size=10" -H "Authorization: Bearer <TOKEN_CLIENTE>"
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 55 peticiones y 129 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 66 peticiones y 153 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -148,6 +169,7 @@ La carpeta `00 - Preparacion` obtiene el token del ADMIN y crea dos propietarios
 luego `01 - HU-2` y `02 - Seguridad` prueban la creación de restaurantes, y `03 - HU-3` crea platos en el
 restaurante del primer propietario (el segundo se usa para comprobar el 403). `04 - HU-4` edita ese plato y
 `05 - HU-6` consulta el restaurante por id y `06 - HU-7` desactiva y vuelve a activar el plato.
+`07 - HU-9` registra un cliente en usuarios y lista los restaurantes paginados.
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura

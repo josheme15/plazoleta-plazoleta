@@ -2,6 +2,7 @@ package com.plazoleta.plazoleta.domain.usecase;
 
 import com.plazoleta.plazoleta.domain.api.IRestaurantServicePort;
 import com.plazoleta.plazoleta.domain.exception.InvalidNitException;
+import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPhoneException;
 import com.plazoleta.plazoleta.domain.exception.InvalidRestaurantNameException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
@@ -9,6 +10,7 @@ import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.UserIsNotOwnerException;
+import com.plazoleta.plazoleta.domain.model.PageResult;
 import com.plazoleta.plazoleta.domain.model.Restaurant;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IUserClientPort;
@@ -54,6 +56,14 @@ public class RestaurantUseCase implements IRestaurantServicePort {
             throw new RequiredFieldException("idRestaurante");
         }
         return restaurantPersistencePort.findById(restaurantId).orElseThrow(RestaurantNotFoundException::new);
+    }
+
+    @Override
+    public PageResult<Restaurant> listRestaurants(Integer page, Integer size) {
+        if (page == null || size == null || page < 0 || size <= 0) {
+            throw new InvalidPaginationException();
+        }
+        return restaurantPersistencePort.findAllOrderedByName(page, size);
     }
 
     private void validateRequiredFields(Restaurant restaurant) {
