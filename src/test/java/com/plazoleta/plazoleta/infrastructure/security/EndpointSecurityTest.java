@@ -1,6 +1,8 @@
 package com.plazoleta.plazoleta.infrastructure.security;
 
 import com.plazoleta.plazoleta.application.dto.response.DishResponseDto;
+import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
+import com.plazoleta.plazoleta.application.dto.response.RestaurantListItemResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.RestaurantResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
 import com.plazoleta.plazoleta.application.handler.IRestaurantHandler;
@@ -22,6 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Date;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -29,6 +32,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -181,6 +185,51 @@ class EndpointSecurityTest {
         mockMvc.perform(patch("/dishes/1/status").header(HttpHeaders.AUTHORIZATION, bearer("OWNER"))
                         .contentType(MediaType.APPLICATION_JSON).content(DISH_STATUS_BODY))
                 .andExpect(status().isOk());
+    }
+
+    // ---------- GET /restaurants: solo CLIENT (HU-9) ----------
+
+    @Test
+    void listRestaurants_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/restaurants")).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "EMPLOYEE"})
+    void listRestaurants_withNonClientRole_returns403(String role) throws Exception {
+        mockMvc.perform(get("/restaurants").header(HttpHeaders.AUTHORIZATION, bearer(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listRestaurants_withClientRole_returnsOnlyNameAndLogo() throws Exception {
+        when(restaurantHandler.listRestaurants(0, 10)).thenReturn(new PageResponseDto<>(
+                List.of(new RestaurantListItemResponseDto("Arepas", "https://logo/1.png")), 0, 10, 1, 1));
+
+        mockMvc.perform(get("/restaurants").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].name").value("Arepas"))
+                .andExpect(jsonPath("$.content[0].urlLogo").value("https://logo/1.png"))
+                .andExpect(jsonPath("$.content[0].nit").doesNotExist())
+                .andExpect(jsonPath("$.content[0].ownerId").doesNotExist())
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @Test
+    void listRestaurants_passesPageAndSizeParameters() throws Exception {
+        when(restaurantHandler.listRestaurants(2, 5)).thenReturn(new PageResponseDto<>(List.of(), 2, 5, 11, 3));
+
+        mockMvc.perform(get("/restaurants").param("page", "2").param("size", "5")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(5));
+    }
+
+    @Test
+    void listRestaurants_withNonNumericSize_returns400() throws Exception {
+        mockMvc.perform(get("/restaurants").param("size", "abc").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isBadRequest());
     }
 
     // ---------- GET /restaurants/{id}: cualquier usuario autenticado (HU-6) ----------
