@@ -1,7 +1,7 @@
 # plazoleta-plazoleta
 
 Microservicio de **plazoleta** de la plazoleta de comidas (Spring Boot 3 + arquitectura hexagonal).
-Responsable de restaurantes y platos (y en próximas HU: pedidos).
+Responsable de restaurantes, platos y pedidos.
 
 ## Historias de usuario implementadas
 
@@ -15,6 +15,7 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 | HU-7 | Activar / desactivar plato | `PATCH /dishes/{id}/status` | OWNER (propietario del restaurante) |
 | HU-9 | Listar restaurantes | `GET /restaurants?page=0&size=10` | CLIENT |
 | HU-10 | Platos por restaurante (menú) | `GET /restaurants/{id}/dishes?categoryId=2&page=0&size=10` | CLIENT |
+| HU-11 | Realizar pedido | `POST /orders` | CLIENT |
 
 ### Reglas de la HU-2
 
@@ -39,6 +40,22 @@ Responsable de restaurantes y platos (y en próximas HU: pedidos).
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-11
+
+- Solo el rol `CLIENT` puede realizar pedidos (403 con otro rol, 401 sin token).
+- El pedido indica el **restaurante** y la lista de **platos** con su **cantidad**:
+  ```json
+  { "restaurantId": 1, "dishes": [ { "dishId": 12, "quantity": 2 }, { "dishId": 13, "quantity": 1 } ] }
+  ```
+- Todos los platos deben ser **del mismo restaurante** indicado (400); restaurante o plato inexistentes: 404.
+- Restaurante y platos obligatorios, cantidad entera mayor a 0, sin platos repetidos en la lista (400).
+- No se pueden pedir platos desactivados (400).
+- El pedido queda en estado **PENDIENTE**, con la fecha y el cliente del token; sin empleado asignado.
+- **Un solo pedido en proceso por cliente:** si tiene uno `PENDIENTE`, `EN_PREPARACION` o `LISTO`, responde 409.
+
+Ciclo de vida del pedido: `PENDIENTE` → `EN_PREPARACION` → `LISTO` → `ENTREGADO` (o `CANCELADO`).
+Tablas: `orders` (pedido) y `order_dishes` (platos del pedido con su cantidad).
 
 ### Reglas de la HU-10
 
@@ -86,6 +103,7 @@ El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el
 | `PATCH /dishes/{id}/status` | OWNER, dueño del restaurante | 401 | 403 |
 | `GET /restaurants` | CLIENT | 401 | 403 |
 | `GET /restaurants/{id}/dishes` | CLIENT | 401 | 403 |
+| `POST /orders` | CLIENT | 401 | 403 |
 
 `EndpointSecurityTest` verifica esta matriz con tokens reales; la regla "dueño del restaurante" se prueba en `DishUseCaseTest`.
 
@@ -167,13 +185,18 @@ curl "http://localhost:8082/restaurants?page=0&size=10" -H "Authorization: Beare
 
 # 7. Ver el menu de un restaurante (opcional: filtrar por categoria)
 curl "http://localhost:8082/restaurants/1/dishes?categoryId=2&page=0&size=10" -H "Authorization: Bearer <TOKEN_CLIENTE>"
+
+# 8. Realizar un pedido como CLIENTE
+curl -X POST http://localhost:8082/orders \
+  -H "Authorization: Bearer <TOKEN_CLIENTE>" -H "Content-Type: application/json" \
+  -d '{"restaurantId":1,"dishes":[{"dishId":1,"quantity":2}]}'
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 81 peticiones y 188 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 98 peticiones y 226 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -186,6 +209,8 @@ restaurante del primer propietario (el segundo se usa para comprobar el 403). `0
 `05 - HU-6` consulta el restaurante por id y `06 - HU-7` desactiva y vuelve a activar el plato.
 `07 - HU-9` registra un cliente en usuarios y lista los restaurantes paginados.
 `08 - HU-10` crea un postre y un plato desactivado, y consulta el menú con y sin filtro de categoría.
+`09 - HU-11` registra su propio cliente, prueba los pedidos inválidos, realiza un pedido y comprueba que no
+se pueda hacer otro mientras el primero esté en proceso.
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
