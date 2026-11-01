@@ -16,6 +16,7 @@ Responsable de restaurantes, platos y pedidos.
 | HU-9 | Listar restaurantes | `GET /restaurants?page=0&size=10` | CLIENT |
 | HU-10 | Platos por restaurante (menú) | `GET /restaurants/{id}/dishes?categoryId=2&page=0&size=10` | CLIENT |
 | HU-11 | Realizar pedido | `POST /orders` | CLIENT |
+| HU-12 | Pedidos del restaurante con filtro por estado | `GET /orders?status=PENDIENTE&page=0&size=10` | EMPLOYEE |
 
 ### Reglas de la HU-2
 
@@ -40,6 +41,18 @@ Responsable de restaurantes, platos y pedidos.
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-12
+
+- Solo el rol `EMPLOYEE` puede listar pedidos (403 con otro rol, 401 sin token).
+- **Solo los pedidos del restaurante al que pertenece el empleado:** el restaurante sale del claim
+  `restaurantId` de su token (lo agrega plazoleta-usuarios al iniciar sesión); el empleado no lo envía.
+  Si el token no trae restaurante, responde 403.
+- **Filtro por estado** con `status` (opcional): `PENDIENTE`, `EN_PREPARACION`, `LISTO`, `ENTREGADO` o
+  `CANCELADO`; un valor distinto responde 400. Sin `status` se listan todos.
+- **Paginado** con `size` (pedidos por página) y `page` (desde 0); mismas reglas que la HU-9.
+- Del más antiguo al más reciente, con **todos los campos** del pedido: `id`, `clientId`, `restaurantId`,
+  `date`, `status`, `employeeId` y `dishes` (`dishId`, `quantity`).
 
 ### Reglas de la HU-11
 
@@ -104,6 +117,7 @@ El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el
 | `GET /restaurants` | CLIENT | 401 | 403 |
 | `GET /restaurants/{id}/dishes` | CLIENT | 401 | 403 |
 | `POST /orders` | CLIENT | 401 | 403 |
+| `GET /orders` | EMPLOYEE (pedidos de su restaurante) | 401 | 403 |
 
 `EndpointSecurityTest` verifica esta matriz con tokens reales; la regla "dueño del restaurante" se prueba en `DishUseCaseTest`.
 
@@ -190,13 +204,16 @@ curl "http://localhost:8082/restaurants/1/dishes?categoryId=2&page=0&size=10" -H
 curl -X POST http://localhost:8082/orders \
   -H "Authorization: Bearer <TOKEN_CLIENTE>" -H "Content-Type: application/json" \
   -d '{"restaurantId":1,"dishes":[{"dishId":1,"quantity":2}]}'
+
+# 9. Listar los pedidos del restaurante como EMPLEADO (filtro opcional por estado)
+curl "http://localhost:8082/orders?status=PENDIENTE&page=0&size=10" -H "Authorization: Bearer <TOKEN_EMPLEADO>"
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 98 peticiones y 226 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 112 peticiones y 255 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -211,6 +228,8 @@ restaurante del primer propietario (el segundo se usa para comprobar el 403). `0
 `08 - HU-10` crea un postre y un plato desactivado, y consulta el menú con y sin filtro de categoría.
 `09 - HU-11` registra su propio cliente, prueba los pedidos inválidos, realiza un pedido y comprueba que no
 se pueda hacer otro mientras el primero esté en proceso.
+`10 - HU-12` crea un empleado del restaurante y un pedido en otro restaurante, y lista los pedidos con y sin
+filtro de estado (el pedido del otro restaurante no aparece).
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
