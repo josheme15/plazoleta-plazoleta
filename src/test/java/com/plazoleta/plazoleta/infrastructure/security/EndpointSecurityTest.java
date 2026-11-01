@@ -1,5 +1,6 @@
 package com.plazoleta.plazoleta.infrastructure.security;
 
+import com.plazoleta.plazoleta.application.dto.response.DishMenuItemResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.DishResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.RestaurantListItemResponseDto;
@@ -7,6 +8,7 @@ import com.plazoleta.plazoleta.application.dto.response.RestaurantResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
 import com.plazoleta.plazoleta.application.handler.IRestaurantHandler;
 import com.plazoleta.plazoleta.infrastructure.input.rest.DishRestController;
+import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantMenuRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantRestController;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -40,7 +42,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Usa el filtro JWT y las reglas reales de SecurityConfig; los handlers son mocks.
  * La validacion "es el propietario de ESE restaurante" se prueba en DishUseCaseTest.
  */
-@WebMvcTest(controllers = {RestaurantRestController.class, DishRestController.class})
+@WebMvcTest(controllers = {RestaurantRestController.class, DishRestController.class,
+        RestaurantMenuRestController.class})
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtService.class})
 @TestPropertySource(properties = "security.jwt.secret=" + EndpointSecurityTest.SECRET)
 class EndpointSecurityTest {
@@ -229,6 +232,53 @@ class EndpointSecurityTest {
     @Test
     void listRestaurants_withNonNumericSize_returns400() throws Exception {
         mockMvc.perform(get("/restaurants").param("size", "abc").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ---------- GET /restaurants/{id}/dishes: solo CLIENT (HU-10) ----------
+
+    @Test
+    void listDishesByRestaurant_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/restaurants/1/dishes")).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "EMPLOYEE"})
+    void listDishesByRestaurant_withNonClientRole_returns403(String role) throws Exception {
+        mockMvc.perform(get("/restaurants/1/dishes").header(HttpHeaders.AUTHORIZATION, bearer(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listDishesByRestaurant_withClientRole_returnsMenuPage() throws Exception {
+        when(dishHandler.listDishesByRestaurant(1L, null, 0, 10)).thenReturn(new PageResponseDto<>(
+                List.of(new DishMenuItemResponseDto(5L, "Bandeja paisa", 32000, "Frijoles", "https://img", 2L)),
+                0, 10, 1, 1));
+
+        mockMvc.perform(get("/restaurants/1/dishes").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(5))
+                .andExpect(jsonPath("$.content[0].name").value("Bandeja paisa"))
+                .andExpect(jsonPath("$.content[0].categoryId").value(2))
+                .andExpect(jsonPath("$.content[0].active").doesNotExist())
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void listDishesByRestaurant_passesCategoryAndPaginationParameters() throws Exception {
+        when(dishHandler.listDishesByRestaurant(1L, 3L, 2, 5)).thenReturn(new PageResponseDto<>(List.of(), 2, 5, 0, 0));
+
+        mockMvc.perform(get("/restaurants/1/dishes").param("categoryId", "3").param("page", "2").param("size", "5")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(5));
+    }
+
+    @Test
+    void listDishesByRestaurant_withNonNumericCategory_returns400() throws Exception {
+        mockMvc.perform(get("/restaurants/1/dishes").param("categoryId", "abc")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
                 .andExpect(status().isBadRequest());
     }
 

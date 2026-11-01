@@ -8,7 +8,9 @@ import com.plazoleta.plazoleta.domain.exception.NoDishFieldsToUpdateException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.model.Dish;
+import com.plazoleta.plazoleta.domain.model.PageResult;
 import com.plazoleta.plazoleta.domain.model.Restaurant;
 import com.plazoleta.plazoleta.domain.spi.IAuthenticatedUserPort;
 import com.plazoleta.plazoleta.domain.spi.ICategoryPersistencePort;
@@ -24,6 +26,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -394,5 +398,80 @@ class DishUseCaseTest {
     void changeDishStatus_withNullId_throwsException() {
         assertThrows(RequiredFieldException.class, () -> dishUseCase.changeDishStatus(null, false));
         verify(dishPersistencePort, never()).findById(any());
+    }
+
+    // ---------- HU-10: platos por restaurante ----------
+
+    private PageResult<Dish> menuPage() {
+        return new PageResult<>(List.of(storedDish()), 0, 10, 1, 1);
+    }
+
+    @Test
+    void listDishesByRestaurant_withoutCategory_returnsActiveDishesOfRestaurant() {
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        PageResult<Dish> page = menuPage();
+        when(dishPersistencePort.findActiveByRestaurant(RESTAURANT_ID, null, 0, 10)).thenReturn(page);
+
+        assertSame(page, dishUseCase.listDishesByRestaurant(RESTAURANT_ID, null, 0, 10));
+        verify(categoryPersistencePort, never()).existsById(any());
+    }
+
+    @Test
+    void listDishesByRestaurant_withCategory_filtersByCategory() {
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        when(categoryPersistencePort.existsById(CATEGORY_ID)).thenReturn(true);
+        PageResult<Dish> page = menuPage();
+        when(dishPersistencePort.findActiveByRestaurant(RESTAURANT_ID, CATEGORY_ID, 1, 5)).thenReturn(page);
+
+        assertSame(page, dishUseCase.listDishesByRestaurant(RESTAURANT_ID, CATEGORY_ID, 1, 5));
+    }
+
+    @Test
+    void listDishesByRestaurant_doesNotRequireOwnerNorAuthenticatedUser() {
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        when(dishPersistencePort.findActiveByRestaurant(RESTAURANT_ID, null, 0, 10)).thenReturn(menuPage());
+
+        dishUseCase.listDishesByRestaurant(RESTAURANT_ID, null, 0, 10);
+
+        verify(authenticatedUserPort, never()).getAuthenticatedUserId();
+    }
+
+    @Test
+    void listDishesByRestaurant_whenRestaurantDoesNotExist_throwsException() {
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.empty());
+
+        assertThrows(RestaurantNotFoundException.class,
+                () -> dishUseCase.listDishesByRestaurant(RESTAURANT_ID, null, 0, 10));
+        verify(dishPersistencePort, never()).findActiveByRestaurant(any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    void listDishesByRestaurant_whenCategoryDoesNotExist_throwsException() {
+        when(restaurantPersistencePort.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        when(categoryPersistencePort.existsById(99L)).thenReturn(false);
+
+        assertThrows(CategoryNotFoundException.class,
+                () -> dishUseCase.listDishesByRestaurant(RESTAURANT_ID, 99L, 0, 10));
+        verify(dishPersistencePort, never()).findActiveByRestaurant(any(), any(), anyInt(), anyInt());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, -5})
+    void listDishesByRestaurant_withNegativePage_throwsException(int page) {
+        assertThrows(InvalidPaginationException.class,
+                () -> dishUseCase.listDishesByRestaurant(RESTAURANT_ID, null, page, 10));
+        verify(restaurantPersistencePort, never()).findById(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    void listDishesByRestaurant_withNonPositiveSize_throwsException(int size) {
+        assertThrows(InvalidPaginationException.class,
+                () -> dishUseCase.listDishesByRestaurant(RESTAURANT_ID, null, 0, size));
+    }
+
+    @Test
+    void listDishesByRestaurant_withNullRestaurant_throwsException() {
+        assertThrows(RequiredFieldException.class, () -> dishUseCase.listDishesByRestaurant(null, null, 0, 10));
     }
 }
