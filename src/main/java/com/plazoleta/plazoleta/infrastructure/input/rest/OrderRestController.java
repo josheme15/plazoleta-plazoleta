@@ -2,9 +2,12 @@ package com.plazoleta.plazoleta.infrastructure.input.rest;
 
 import com.plazoleta.plazoleta.application.dto.request.OrderRequestDto;
 import com.plazoleta.plazoleta.application.dto.response.OrderResponseDto;
+import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
 import com.plazoleta.plazoleta.application.handler.IOrderHandler;
+import com.plazoleta.plazoleta.domain.model.OrderStatus;
 import com.plazoleta.plazoleta.infrastructure.exceptionhandler.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -15,9 +18,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -52,5 +57,33 @@ public class OrderRestController {
     @PostMapping
     public ResponseEntity<OrderResponseDto> createOrder(@Valid @RequestBody OrderRequestDto orderRequestDto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderHandler.createOrder(orderRequestDto));
+    }
+
+    @Operation(summary = "Listar pedidos del restaurante (filtro por estado)",
+            description = "Devuelve los pedidos del restaurante al que pertenece el empleado autenticado (sale de su "
+                    + "token), paginados y del mas antiguo al mas reciente, con todos sus campos. Se puede filtrar "
+                    + "por estado. Solo disponible para el rol EMPLEADO.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pagina de pedidos del restaurante"),
+            @ApiResponse(responseCode = "400",
+                    description = "Estado invalido, page negativo, size menor o igual a 0 o parametros no numericos",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, invalido o expirado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403",
+                    description = "El usuario no es EMPLEADO o no tiene un restaurante asignado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping
+    public ResponseEntity<PageResponseDto<OrderResponseDto>> listRestaurantOrders(
+            @Parameter(description = "Filtra por estado (opcional): PENDIENTE, EN_PREPARACION, LISTO, ENTREGADO o "
+                    + "CANCELADO", example = "PENDIENTE")
+            @RequestParam(required = false) OrderStatus status,
+            @Parameter(description = "Numero de pagina, desde 0", example = "0")
+            @RequestParam(defaultValue = "0") Integer page,
+            @Parameter(description = "Cantidad de pedidos por pagina", example = "10")
+            @RequestParam(defaultValue = "10") Integer size) {
+        return ResponseEntity.ok(orderHandler.listRestaurantOrders(status, page, size));
     }
 }
