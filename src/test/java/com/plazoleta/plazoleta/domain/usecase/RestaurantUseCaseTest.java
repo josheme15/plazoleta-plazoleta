@@ -1,6 +1,7 @@
 package com.plazoleta.plazoleta.domain.usecase;
 
 import com.plazoleta.plazoleta.domain.exception.InvalidNitException;
+import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPhoneException;
 import com.plazoleta.plazoleta.domain.exception.InvalidRestaurantNameException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
@@ -8,6 +9,7 @@ import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.UserIsNotOwnerException;
+import com.plazoleta.plazoleta.domain.model.PageResult;
 import com.plazoleta.plazoleta.domain.model.Restaurant;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IUserClientPort;
@@ -20,12 +22,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -236,5 +240,46 @@ class RestaurantUseCaseTest {
     void getRestaurantById_withNullId_throwsException() {
         assertThrows(RequiredFieldException.class, () -> restaurantUseCase.getRestaurantById(null));
         verify(restaurantPersistencePort, never()).findById(any());
+    }
+
+    // ---------- HU-9: listar restaurantes ----------
+
+    @Test
+    void listRestaurants_withValidPagination_returnsPageFromPersistence() {
+        PageResult<Restaurant> page = new PageResult<>(List.of(validRestaurant()), 1, 5, 6, 2);
+        when(restaurantPersistencePort.findAllOrderedByName(1, 5)).thenReturn(page);
+
+        PageResult<Restaurant> result = restaurantUseCase.listRestaurants(1, 5);
+
+        assertSame(page, result);
+        verify(restaurantPersistencePort).findAllOrderedByName(1, 5);
+    }
+
+    @Test
+    void listRestaurants_withFirstPageAndSizeOne_isValid() {
+        PageResult<Restaurant> page = new PageResult<>(List.of(), 0, 1, 0, 0);
+        when(restaurantPersistencePort.findAllOrderedByName(0, 1)).thenReturn(page);
+
+        assertSame(page, restaurantUseCase.listRestaurants(0, 1));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, -10})
+    void listRestaurants_withNegativePage_throwsException(int page) {
+        assertThrows(InvalidPaginationException.class, () -> restaurantUseCase.listRestaurants(page, 10));
+        verify(restaurantPersistencePort, never()).findAllOrderedByName(anyInt(), anyInt());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    void listRestaurants_withNonPositiveSize_throwsException(int size) {
+        assertThrows(InvalidPaginationException.class, () -> restaurantUseCase.listRestaurants(0, size));
+        verify(restaurantPersistencePort, never()).findAllOrderedByName(anyInt(), anyInt());
+    }
+
+    @Test
+    void listRestaurants_withNullParameters_throwsException() {
+        assertThrows(InvalidPaginationException.class, () -> restaurantUseCase.listRestaurants(null, 10));
+        assertThrows(InvalidPaginationException.class, () -> restaurantUseCase.listRestaurants(0, null));
     }
 }
