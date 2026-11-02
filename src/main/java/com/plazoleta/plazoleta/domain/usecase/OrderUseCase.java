@@ -2,6 +2,7 @@ package com.plazoleta.plazoleta.domain.usecase;
 
 import com.plazoleta.plazoleta.domain.api.IOrderServicePort;
 import com.plazoleta.plazoleta.domain.exception.ClientHasActiveOrderException;
+import com.plazoleta.plazoleta.domain.exception.ClientNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DishFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.DishNotAvailableException;
 import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
@@ -9,8 +10,10 @@ import com.plazoleta.plazoleta.domain.exception.DuplicateDishInOrderException;
 import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidQuantityException;
+import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
 import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotPendingException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
@@ -23,7 +26,10 @@ import com.plazoleta.plazoleta.domain.spi.IAuthenticatedUserPort;
 import com.plazoleta.plazoleta.domain.spi.IDishPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IOrderPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
+import com.plazoleta.plazoleta.domain.spi.ISmsClientPort;
+import com.plazoleta.plazoleta.domain.spi.IUserClientPort;
 
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -31,21 +37,31 @@ import java.util.Set;
 
 public class OrderUseCase implements IOrderServicePort {
 
+    private static final int PIN_BOUND = 1_000_000;
+    private static final String READY_MESSAGE = "Tu pedido #%d esta listo. Presenta este PIN para reclamarlo: %s";
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private final IOrderPersistencePort orderPersistencePort;
     private final IRestaurantPersistencePort restaurantPersistencePort;
     private final IDishPersistencePort dishPersistencePort;
     private final IAuthenticatedUserPort authenticatedUserPort;
+    private final IUserClientPort userClientPort;
+    private final ISmsClientPort smsClientPort;
     private final Clock clock;
 
     public OrderUseCase(IOrderPersistencePort orderPersistencePort,
                         IRestaurantPersistencePort restaurantPersistencePort,
                         IDishPersistencePort dishPersistencePort,
                         IAuthenticatedUserPort authenticatedUserPort,
+                        IUserClientPort userClientPort,
+                        ISmsClientPort smsClientPort,
                         Clock clock) {
         this.orderPersistencePort = orderPersistencePort;
         this.restaurantPersistencePort = restaurantPersistencePort;
         this.dishPersistencePort = dishPersistencePort;
         this.authenticatedUserPort = authenticatedUserPort;
+        this.userClientPort = userClientPort;
+        this.smsClientPort = smsClientPort;
         this.clock = clock;
     }
 
@@ -80,14 +96,7 @@ public class OrderUseCase implements IOrderServicePort {
 
     @Override
     public Order assignOrder(Long orderId) {
-        if (orderId == null) {
-            throw new RequiredFieldException("idPedido");
-        }
-        Long restaurantId = employeeRestaurantId();
-        Order order = orderPersistencePort.findById(orderId).orElseThrow(OrderNotFoundException::new);
-        if (!restaurantId.equals(order.getRestaurantId())) {
-            throw new OrderFromAnotherRestaurantException();
-        }
+        Order order = findEmployeeRestaurantOrder(orderId);
         if (order.getStatus() != OrderStatus.PENDIENTE) {
             throw new OrderNotPendingException();
         }
@@ -96,6 +105,49 @@ public class OrderUseCase implements IOrderServicePort {
         order.setEmployeeId(authenticatedUserPort.getAuthenticatedUserId());
         order.setStatus(OrderStatus.EN_PREPARACION);
         return orderPersistencePort.updateOrder(order);
+    }
+
+    @Override
+    public Order markOrderReady(Long orderId) {
+        Order order = findEmployeeRestaurantOrder(orderId);
+        if (order.getStatus() != OrderStatus.EN_PREPARACION) {
+            throw new OrderNotInPreparationException();
+        }
+        if (!authenticatedUserPort.getAuthenticatedUserId().equals(order.getEmployeeId())) {
+            throw new NotAssignedEmployeeException();
+        }
+        String phone = userClientPort.findUserPhoneById(order.getClientId())
+                .orElseThrow(ClientNotFoundException::new);
+
+        // Primero se notifica: si el SMS falla, el pedido sigue EN_PREPARACION y se puede reintentar.
+        String pin = generatePin();
+        smsClientPort.sendSms(phone, String.format(READY_MESSAGE, order.getId(), pin));
+
+        order.setPin(pin);
+        order.setStatus(OrderStatus.LISTO);
+        return orderPersistencePort.updateOrder(order);
+    }
+
+    /**
+     * Busca el pedido y verifica que sea del restaurante del empleado autenticado.
+     */
+    private Order findEmployeeRestaurantOrder(Long orderId) {
+        if (orderId == null) {
+            throw new RequiredFieldException("idPedido");
+        }
+        Long restaurantId = employeeRestaurantId();
+        Order order = orderPersistencePort.findById(orderId).orElseThrow(OrderNotFoundException::new);
+        if (!restaurantId.equals(order.getRestaurantId())) {
+            throw new OrderFromAnotherRestaurantException();
+        }
+        return order;
+    }
+
+    /**
+     * PIN de seguridad de 6 digitos (con ceros a la izquierda) para reclamar el pedido.
+     */
+    private static String generatePin() {
+        return String.format("%06d", RANDOM.nextInt(PIN_BOUND));
     }
 
     private Long employeeRestaurantId() {

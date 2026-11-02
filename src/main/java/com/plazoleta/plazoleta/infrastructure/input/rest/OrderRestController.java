@@ -114,4 +114,35 @@ public class OrderRestController {
     public ResponseEntity<OrderResponseDto> assignOrder(@PathVariable Long id) {
         return ResponseEntity.ok(orderHandler.assignOrder(id));
     }
+
+    @Operation(summary = "Marcar pedido como listo (pasa a LISTO y notifica al cliente)",
+            description = "El empleado asignado marca su pedido EN_PREPARACION como LISTO. Se genera un PIN de "
+                    + "seguridad de 6 digitos y se envia por SMS al celular del cliente (microservicio de "
+                    + "mensajeria); el cliente lo presenta para reclamar su pedido. El PIN no se devuelve en la "
+                    + "respuesta. Si el SMS no se puede enviar, el pedido sigue EN_PREPARACION. Solo disponible "
+                    + "para el rol EMPLEADO.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pedido listo y cliente notificado por SMS",
+                    content = @Content(schema = @Schema(implementation = OrderResponseDto.class))),
+            @ApiResponse(responseCode = "400", description = "El id del pedido no es numerico",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, invalido o expirado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403",
+                    description = "El usuario no es EMPLEADO, no tiene restaurante, el pedido es de otro restaurante "
+                            + "o no es el empleado asignado al pedido",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No existe el pedido o su cliente",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "El pedido no esta EN_PREPARACION",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "503",
+                    description = "El servicio de usuarios o el de mensajeria no esta disponible",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PatchMapping("/{id}/ready")
+    public ResponseEntity<OrderResponseDto> markOrderReady(@PathVariable Long id) {
+        return ResponseEntity.ok(orderHandler.markOrderReady(id));
+    }
 }

@@ -2,16 +2,20 @@ package com.plazoleta.plazoleta.infrastructure.exceptionhandler;
 
 import com.plazoleta.plazoleta.domain.exception.CategoryNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.ClientHasActiveOrderException;
+import com.plazoleta.plazoleta.domain.exception.ClientNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DomainException;
 import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
+import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
 import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotPendingException;
 import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
+import com.plazoleta.plazoleta.infrastructure.output.client.exception.MessagingServiceUnavailableException;
 import com.plazoleta.plazoleta.infrastructure.output.client.exception.UserServiceUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,19 +31,20 @@ import java.util.List;
 public class ControllerAdvisor {
 
     @ExceptionHandler({NitAlreadyExistsException.class, ClientHasActiveOrderException.class,
-            OrderNotPendingException.class})
+            OrderNotPendingException.class, OrderNotInPreparationException.class})
     public ResponseEntity<ErrorResponse> handleConflict(DomainException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
 
     @ExceptionHandler({OwnerNotFoundException.class, RestaurantNotFoundException.class,
-            CategoryNotFoundException.class, DishNotFoundException.class, OrderNotFoundException.class})
+            CategoryNotFoundException.class, DishNotFoundException.class, OrderNotFoundException.class,
+            ClientNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(DomainException ex) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler({NotRestaurantOwnerException.class, EmployeeWithoutRestaurantException.class,
-            OrderFromAnotherRestaurantException.class})
+            OrderFromAnotherRestaurantException.class, NotAssignedEmployeeException.class})
     public ResponseEntity<ErrorResponse> handleNotRestaurantOwner(DomainException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
     }
@@ -49,8 +54,8 @@ public class ControllerAdvisor {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    @ExceptionHandler(UserServiceUnavailableException.class)
-    public ResponseEntity<ErrorResponse> handleUserServiceUnavailable(UserServiceUnavailableException ex) {
+    @ExceptionHandler({UserServiceUnavailableException.class, MessagingServiceUnavailableException.class})
+    public ResponseEntity<ErrorResponse> handleServiceUnavailable(RuntimeException ex) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
     }
 

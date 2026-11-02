@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Plazoleta - Plazoleta",
-    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere ambos microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d).\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 -> 05 HU-6 -> 06 HU-7 -> 07 HU-9 -> 08 HU-10 -> 09 HU-11 -> 10 HU-12 -> 11 HU-13 (usar el Collection Runner).",
+    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere los microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d), y para la carpeta 12 tambien mensajeria (http://localhost:8083).\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 -> 05 HU-6 -> 06 HU-7 -> 07 HU-9 -> 08 HU-10 -> 09 HU-11 -> 10 HU-12 -> 11 HU-13 -> 12 HU-14 (usar el Collection Runner).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -6558,6 +6558,714 @@
           ]
         }
       ]
+    },
+    {
+      "name": "12 - HU-14 Pedido listo",
+      "description": "PATCH /orders/{id}/ready. El EMPLEADO asignado marca su pedido EN_PREPARACION como LISTO: se genera un PIN de seguridad de 6 digitos y se envia por SMS al celular del cliente usando el microservicio plazoleta-mensajeria (debe estar levantado en el puerto 8083; por defecto el SMS es simulado y se ve en su consola). El PIN no se devuelve en la respuesta. Usa el pedido de la carpeta 09, que el empleado de la carpeta 10 se asigno en la carpeta 11.",
+      "item": [
+        {
+          "name": "Preparacion: crear segundo empleado del restaurante (usuarios, 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/users/employee",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "users",
+                "employee"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Laura\",\n  \"lastName\": \"Gil\",\n  \"documentNumber\": \"{{hu14EmployeeDocument}}\",\n  \"phone\": \"+573134445566\",\n  \"email\": \"{{hu14EmployeeEmail}}\",\n  \"roleId\": 3,\n  \"password\": \"Clave123*\",\n  \"restaurantId\": {{restaurantId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const unique = Date.now().toString();",
+                  "pm.collectionVariables.set(\"hu14EmployeeDocument\", unique.slice(-10));",
+                  "pm.collectionVariables.set(\"hu14EmployeeEmail\", \"empleado_hu14_\" + unique + \"@correo.com\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparacion: login segundo empleado (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/auth/login",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hu14EmployeeEmail}}\",\n  \"password\": \"Clave123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"secondEmployeeToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparacion: registrar cliente (usuarios, 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/users/client",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "users",
+                "client"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Valentina\",\n  \"lastName\": \"Ruiz\",\n  \"documentNumber\": \"{{hu14ClientDocument}}\",\n  \"phone\": \"+573245556677\",\n  \"email\": \"{{hu14ClientEmail}}\",\n  \"roleId\": 4,\n  \"password\": \"Clave123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const unique = Date.now().toString();",
+                  "pm.collectionVariables.set(\"hu14ClientDocument\", unique.slice(-10));",
+                  "pm.collectionVariables.set(\"hu14ClientEmail\", \"cliente_hu14_\" + unique + \"@correo.com\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparacion: login de ese cliente (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/auth/login",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hu14ClientEmail}}\",\n  \"password\": \"Clave123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"hu14ClientToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparacion: pedido PENDIENTE en el restaurante (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu14ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurantId\": {{restaurantId}},\n  \"dishes\": [\n    { \"dishId\": {{dishId}}, \"quantity\": 1 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"pendingOrderId\", pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pedido PENDIENTE no se puede marcar listo (409)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{pendingOrderId}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{pendingOrderId}}",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Mensaje: Solo se puede marcar como LISTO un pedido en estado EN_PREPARACION\", () => pm.expect(pm.response.json().message).to.eql(\"Solo se puede marcar como LISTO un pedido en estado EN_PREPARACION\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Otro empleado del restaurante intenta marcarlo listo (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{orderId}}",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{secondEmployeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Mensaje: Solo el empleado asignado al pedido puede marcarlo como LISTO\", () => pm.expect(pm.response.json().message).to.eql(\"Solo el empleado asignado al pedido puede marcarlo como LISTO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pedido de OTRO restaurante (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{otherOrderId}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{otherOrderId}}",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Mensaje: El pedido no pertenece al restaurante del empleado\", () => pm.expect(pm.response.json().message).to.eql(\"El pedido no pertenece al restaurante del empleado\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pedido inexistente (404)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/999999999/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "999999999",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Id no numerico (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/abc/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "abc",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CLIENTE intenta marcar listo un pedido (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{orderId}}",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu14ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PROPIETARIO intenta marcar listo un pedido (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{orderId}}",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin token (401)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{orderId}}",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar pedido como listo y notificar al cliente (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{orderId}}",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Estado LISTO\", () => pm.expect(body.status).to.eql(\"LISTO\"));",
+                  "pm.test(\"Es el pedido de la carpeta 09\", () => pm.expect(body.id).to.eql(Number(pm.collectionVariables.get(\"orderId\"))));",
+                  "pm.test(\"Conserva el empleado asignado\", () => pm.expect(body.employeeId).to.not.eql(null));",
+                  "pm.test(\"El PIN NO se expone en la respuesta (solo llega por SMS)\", () => pm.expect(body).to.not.have.property(\"pin\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar pedidos LISTO (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders?status=LISTO",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "LISTO"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"El pedido aparece como LISTO\", () => {",
+                  "    const order = pm.response.json().content.find((o) => o.id === Number(pm.collectionVariables.get(\"orderId\")));",
+                  "    pm.expect(order).to.not.eql(undefined);",
+                  "    pm.expect(order.status).to.eql(\"LISTO\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar listo otra vez el mismo pedido (409)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{orderId}}",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -6699,6 +7407,34 @@
     },
     {
       "key": "assignedEmployeeId",
+      "value": ""
+    },
+    {
+      "key": "hu14EmployeeDocument",
+      "value": ""
+    },
+    {
+      "key": "hu14EmployeeEmail",
+      "value": ""
+    },
+    {
+      "key": "secondEmployeeToken",
+      "value": ""
+    },
+    {
+      "key": "hu14ClientDocument",
+      "value": ""
+    },
+    {
+      "key": "hu14ClientEmail",
+      "value": ""
+    },
+    {
+      "key": "hu14ClientToken",
+      "value": ""
+    },
+    {
+      "key": "pendingOrderId",
       "value": ""
     }
   ]

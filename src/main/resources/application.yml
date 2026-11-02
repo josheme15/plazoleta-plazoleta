@@ -25,6 +25,8 @@ security:
 clients:
   usuarios:
     url: ${USUARIOS_URL:http://localhost:8081}
+  mensajeria:
+    url: ${MENSAJERIA_URL:http://localhost:8083}
 
 springdoc:
   swagger-ui:

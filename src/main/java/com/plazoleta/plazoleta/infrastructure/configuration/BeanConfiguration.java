@@ -6,9 +6,11 @@ import com.plazoleta.plazoleta.domain.spi.IAuthenticatedUserPort;
 import com.plazoleta.plazoleta.domain.spi.ICategoryPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IDishPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
+import com.plazoleta.plazoleta.domain.spi.ISmsClientPort;
 import com.plazoleta.plazoleta.domain.spi.IUserClientPort;
 import com.plazoleta.plazoleta.domain.usecase.DishUseCase;
 import com.plazoleta.plazoleta.domain.usecase.RestaurantUseCase;
+import com.plazoleta.plazoleta.infrastructure.output.client.adapter.SmsRestClientAdapter;
 import com.plazoleta.plazoleta.infrastructure.output.client.adapter.UserRestClientAdapter;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.adapter.CategoryJpaAdapter;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.adapter.DishJpaAdapter;
@@ -46,9 +48,22 @@ public class BeanConfiguration {
     @Value("${clients.usuarios.url}")
     private String usuariosUrl;
 
+    @Value("${clients.mensajeria.url}")
+    private String mensajeriaUrl;
+
     @Bean
     public RestClient usuariosRestClient(RestClient.Builder builder) {
-        return builder.baseUrl(usuariosUrl).build();
+        return builder.clone().baseUrl(usuariosUrl).build();
+    }
+
+    @Bean
+    public RestClient mensajeriaRestClient(RestClient.Builder builder) {
+        return builder.clone().baseUrl(mensajeriaUrl).build();
+    }
+
+    @Bean
+    public ISmsClientPort smsClientPort(RestClient mensajeriaRestClient) {
+        return new SmsRestClientAdapter(mensajeriaRestClient);
     }
 
     @Bean
@@ -98,8 +113,8 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public IOrderServicePort orderServicePort() {
+    public IOrderServicePort orderServicePort(IUserClientPort userClientPort, ISmsClientPort smsClientPort) {
         return new OrderUseCase(orderPersistencePort(), restaurantPersistencePort(), dishPersistencePort(),
-                authenticatedUserPort(), clock());
+                authenticatedUserPort(), userClientPort, smsClientPort, clock());
     }
 }

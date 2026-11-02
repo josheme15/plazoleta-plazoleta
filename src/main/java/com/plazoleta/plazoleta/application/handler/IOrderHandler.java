@@ -12,4 +12,6 @@ public interface IOrderHandler {
     PageResponseDto<OrderResponseDto> listRestaurantOrders(OrderStatus status, Integer page, Integer size);
 
     OrderResponseDto assignOrder(Long orderId);
+
+    OrderResponseDto markOrderReady(Long orderId);
 }

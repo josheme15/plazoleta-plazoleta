@@ -19,6 +19,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -81,5 +82,36 @@ class UserRestClientAdapterTest {
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
         assertThrows(UserServiceUnavailableException.class, () -> adapter.findUserRoleById(2L));
+    }
+
+    @Test
+    void findUserPhoneById_whenUserExists_returnsPhoneAndForwardsToken() {
+        server.expect(requestTo(BASE_URL + "/users/30"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
+                .andRespond(withSuccess("{\"id\":30,\"phone\":\"+573005698325\",\"role\":\"CLIENT\"}",
+                        MediaType.APPLICATION_JSON));
+
+        assertEquals(Optional.of("+573005698325"), adapter.findUserPhoneById(30L));
+        server.verify();
+    }
+
+    @Test
+    void findUserPhoneById_whenUserDoesNotExist_returnsEmpty() {
+        server.expect(requestTo(BASE_URL + "/users/99"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertEquals(Optional.empty(), adapter.findUserPhoneById(99L));
+    }
+
+    @Test
+    void findUserRoleById_withoutAuthenticatedUser_sendsNoToken() {
+        SecurityContextHolder.clearContext();
+        server.expect(requestTo(BASE_URL + "/users/2"))
+                .andExpect(headerDoesNotExist(HttpHeaders.AUTHORIZATION))
+                .andRespond(withSuccess("{\"id\":2,\"role\":\"OWNER\"}", MediaType.APPLICATION_JSON));
+
+        assertEquals(Optional.of("OWNER"), adapter.findUserRoleById(2L));
+        server.verify();
     }
 }

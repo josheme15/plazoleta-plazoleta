@@ -44,9 +44,13 @@ public class OrderEntity {
     @Column(nullable = false, length = 20)
     private OrderStatus status;
 
-    // Empleado que atiende el pedido (vive en usuarios); se asigna en una HU posterior.
+    // Empleado que se asigno el pedido (vive en usuarios).
     @Column(name = "employee_id")
     private Long employeeId;
+
+    // PIN de seguridad enviado por SMS al cliente cuando el pedido queda LISTO (HU-14).
+    @Column(length = 6)
+    private String pin;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "restaurant_id", nullable = false)
