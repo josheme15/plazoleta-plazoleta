@@ -35,4 +35,9 @@ public class OrderHandler implements IOrderHandler {
         return new PageResponseDto<>(result.getContent(), result.getPage(), result.getSize(),
                 result.getTotalElements(), result.getTotalPages());
     }
+
+    @Override
+    public OrderResponseDto assignOrder(Long orderId) {
+        return orderResponseMapper.toResponse(orderServicePort.assignOrder(orderId));
+    }
 }

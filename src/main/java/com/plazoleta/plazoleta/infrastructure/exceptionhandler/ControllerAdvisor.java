@@ -7,6 +7,9 @@ import com.plazoleta.plazoleta.domain.exception.DomainException;
 import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
+import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotPendingException;
 import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.infrastructure.output.client.exception.UserServiceUnavailableException;
@@ -23,18 +26,20 @@ import java.util.List;
 @RestControllerAdvice
 public class ControllerAdvisor {
 
-    @ExceptionHandler({NitAlreadyExistsException.class, ClientHasActiveOrderException.class})
+    @ExceptionHandler({NitAlreadyExistsException.class, ClientHasActiveOrderException.class,
+            OrderNotPendingException.class})
     public ResponseEntity<ErrorResponse> handleConflict(DomainException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
 
     @ExceptionHandler({OwnerNotFoundException.class, RestaurantNotFoundException.class,
-            CategoryNotFoundException.class, DishNotFoundException.class})
+            CategoryNotFoundException.class, DishNotFoundException.class, OrderNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(DomainException ex) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler({NotRestaurantOwnerException.class, EmployeeWithoutRestaurantException.class})
+    @ExceptionHandler({NotRestaurantOwnerException.class, EmployeeWithoutRestaurantException.class,
+            OrderFromAnotherRestaurantException.class})
     public ResponseEntity<ErrorResponse> handleNotRestaurantOwner(DomainException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
     }

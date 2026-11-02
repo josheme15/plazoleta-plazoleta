@@ -19,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -62,7 +64,8 @@ public class OrderRestController {
     @Operation(summary = "Listar pedidos del restaurante (filtro por estado)",
             description = "Devuelve los pedidos del restaurante al que pertenece el empleado autenticado (sale de su "
                     + "token), paginados y del mas antiguo al mas reciente, con todos sus campos. Se puede filtrar "
-                    + "por estado. Solo disponible para el rol EMPLEADO.",
+                    + "por estado. Solo disponible para el rol EMPLEADO. Cubre el listado de las HU-12 y HU-13: el "
+                    + "empleado busca los pedidos PENDIENTE para asignarse uno con PATCH /orders/{id}/assign.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Pagina de pedidos del restaurante"),
@@ -85,5 +88,30 @@ public class OrderRestController {
             @Parameter(description = "Cantidad de pedidos por pagina", example = "10")
             @RequestParam(defaultValue = "10") Integer size) {
         return ResponseEntity.ok(orderHandler.listRestaurantOrders(status, page, size));
+    }
+
+    @Operation(summary = "Asignarse un pedido (pasa a EN_PREPARACION)",
+            description = "El empleado autenticado se asigna un pedido PENDIENTE de su restaurante: el campo "
+                    + "employeeId queda con su id (sale de su token) y el estado pasa a EN_PREPARACION. "
+                    + "Solo disponible para el rol EMPLEADO.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pedido asignado y en preparacion",
+                    content = @Content(schema = @Schema(implementation = OrderResponseDto.class))),
+            @ApiResponse(responseCode = "400", description = "El id del pedido no es numerico",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, invalido o expirado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403",
+                    description = "El usuario no es EMPLEADO, no tiene restaurante o el pedido es de otro restaurante",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No existe un pedido con el id indicado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "El pedido no esta PENDIENTE (ya fue asignado o avanzo)",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PatchMapping("/{id}/assign")
+    public ResponseEntity<OrderResponseDto> assignOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(orderHandler.assignOrder(id));
     }
 }

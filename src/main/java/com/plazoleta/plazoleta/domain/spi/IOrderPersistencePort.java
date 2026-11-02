@@ -5,6 +5,7 @@ import com.plazoleta.plazoleta.domain.model.OrderStatus;
 import com.plazoleta.plazoleta.domain.model.PageResult;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface IOrderPersistencePort {
 
@@ -17,4 +18,11 @@ public interface IOrderPersistencePort {
      * @return la pagina solicitada de pedidos del restaurante, del mas antiguo al mas reciente.
      */
     PageResult<Order> findByRestaurant(Long restaurantId, OrderStatus status, int page, int size);
+
+    Optional<Order> findById(Long orderId);
+
+    /**
+     * Guarda los cambios de estado y empleado asignado de un pedido existente.
+     */
+    Order updateOrder(Order order);
 }
