@@ -17,6 +17,7 @@ Responsable de restaurantes, platos y pedidos.
 | HU-10 | Platos por restaurante (menú) | `GET /restaurants/{id}/dishes?categoryId=2&page=0&size=10` | CLIENT |
 | HU-11 | Realizar pedido | `POST /orders` | CLIENT |
 | HU-12 | Pedidos del restaurante con filtro por estado | `GET /orders?status=PENDIENTE&page=0&size=10` | EMPLOYEE |
+| HU-13 | Pedido "en preparación": asignarse un pedido | `PATCH /orders/{id}/assign` (+ listado `GET /orders`) | EMPLOYEE |
 
 ### Reglas de la HU-2
 
@@ -41,6 +42,16 @@ Responsable de restaurantes, platos y pedidos.
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-13
+
+- Los criterios de **listado** (filtro por estado, paginado, todos los campos y solo los pedidos del
+  restaurante del empleado) son los mismos de la HU-12 y se cumplen con `GET /orders`.
+- **Asignarse un pedido** con `PATCH /orders/{id}/assign` (solo rol `EMPLOYEE`, sin body):
+  el campo `employeeId` queda con el **id de quien se asigna** (sale de su token) y el estado pasa a
+  **`EN_PREPARACION`**.
+- Solo pedidos **del restaurante del empleado** (403 si es de otro) y en estado **`PENDIENTE`**
+  (409 si ya fue asignado o avanzó). Pedido inexistente: 404.
 
 ### Reglas de la HU-12
 
@@ -118,6 +129,7 @@ El login vive en `plazoleta-usuarios`. Este servicio valida en cada petición el
 | `GET /restaurants/{id}/dishes` | CLIENT | 401 | 403 |
 | `POST /orders` | CLIENT | 401 | 403 |
 | `GET /orders` | EMPLOYEE (pedidos de su restaurante) | 401 | 403 |
+| `PATCH /orders/{id}/assign` | EMPLOYEE (pedidos de su restaurante) | 401 | 403 |
 
 `EndpointSecurityTest` verifica esta matriz con tokens reales; la regla "dueño del restaurante" se prueba en `DishUseCaseTest`.
 
@@ -207,13 +219,16 @@ curl -X POST http://localhost:8082/orders \
 
 # 9. Listar los pedidos del restaurante como EMPLEADO (filtro opcional por estado)
 curl "http://localhost:8082/orders?status=PENDIENTE&page=0&size=10" -H "Authorization: Bearer <TOKEN_EMPLEADO>"
+
+# 10. Asignarse un pedido como EMPLEADO (pasa a EN_PREPARACION)
+curl -X PATCH http://localhost:8082/orders/1/assign -H "Authorization: Bearer <TOKEN_EMPLEADO>"
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 112 peticiones y 255 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 123 peticiones y 282 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -230,6 +245,8 @@ restaurante del primer propietario (el segundo se usa para comprobar el 403). `0
 se pueda hacer otro mientras el primero esté en proceso.
 `10 - HU-12` crea un empleado del restaurante y un pedido en otro restaurante, y lista los pedidos con y sin
 filtro de estado (el pedido del otro restaurante no aparece).
+`11 - HU-13` el empleado se asigna el pedido de la carpeta 09, que pasa a EN_PREPARACION con su id como
+empleado asignado; también prueba reasignar (409) y asignarse un pedido de otro restaurante (403).
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
