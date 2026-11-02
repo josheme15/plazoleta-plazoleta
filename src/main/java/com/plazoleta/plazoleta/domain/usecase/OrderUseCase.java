@@ -9,6 +9,9 @@ import com.plazoleta.plazoleta.domain.exception.DuplicateDishInOrderException;
 import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidQuantityException;
+import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotPendingException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.domain.model.Dish;
@@ -72,11 +75,35 @@ public class OrderUseCase implements IOrderServicePort {
             throw new InvalidPaginationException();
         }
         // El restaurante sale del token del empleado: solo puede ver los pedidos de su restaurante.
+        return orderPersistencePort.findByRestaurant(employeeRestaurantId(), status, page, size);
+    }
+
+    @Override
+    public Order assignOrder(Long orderId) {
+        if (orderId == null) {
+            throw new RequiredFieldException("idPedido");
+        }
+        Long restaurantId = employeeRestaurantId();
+        Order order = orderPersistencePort.findById(orderId).orElseThrow(OrderNotFoundException::new);
+        if (!restaurantId.equals(order.getRestaurantId())) {
+            throw new OrderFromAnotherRestaurantException();
+        }
+        if (order.getStatus() != OrderStatus.PENDIENTE) {
+            throw new OrderNotPendingException();
+        }
+
+        // Asignarse significa que el campo empleado asignado tiene el id de quien se asigna.
+        order.setEmployeeId(authenticatedUserPort.getAuthenticatedUserId());
+        order.setStatus(OrderStatus.EN_PREPARACION);
+        return orderPersistencePort.updateOrder(order);
+    }
+
+    private Long employeeRestaurantId() {
         Long restaurantId = authenticatedUserPort.getAuthenticatedRestaurantId();
         if (restaurantId == null) {
             throw new EmployeeWithoutRestaurantException();
         }
-        return orderPersistencePort.findByRestaurant(restaurantId, status, page, size);
+        return restaurantId;
     }
 
     private void validateRequestData(Order order) {
