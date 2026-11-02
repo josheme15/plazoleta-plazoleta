@@ -24,6 +24,7 @@ import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -155,5 +156,41 @@ class OrderJpaAdapterTest {
         verify(orderRepository).findByRestaurant_IdAndStatus(eq(10L), eq(OrderStatus.LISTO), any(Pageable.class));
         verify(orderRepository, never()).findByRestaurant_Id(any(), any());
         assertEquals(0, result.getContent().size());
+    }
+
+    // ---------- HU-13 ----------
+
+    @Test
+    void findById_mapsOrderWithItsDishes() {
+        when(orderRepository.findById(100L)).thenReturn(Optional.of(savedOrderEntity()));
+
+        Order order = adapter.findById(100L).orElseThrow();
+
+        assertEquals(100L, order.getId());
+        assertEquals(OrderStatus.PENDIENTE, order.getStatus());
+        assertEquals(1L, order.getDishes().get(0).getDishId());
+    }
+
+    @Test
+    void findById_whenMissing_returnsEmpty() {
+        when(orderRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertTrue(adapter.findById(999L).isEmpty());
+    }
+
+    @Test
+    void updateOrder_savesStatusAndAssignedEmployee() {
+        OrderEntity entity = savedOrderEntity();
+        when(orderRepository.findById(100L)).thenReturn(Optional.of(entity));
+        when(orderRepository.save(entity)).thenReturn(entity);
+        Order changes = new Order(100L, 30L, 10L, DATE, OrderStatus.EN_PREPARACION, 8L, List.of());
+
+        Order result = adapter.updateOrder(changes);
+
+        assertEquals(OrderStatus.EN_PREPARACION, entity.getStatus());
+        assertEquals(8L, entity.getEmployeeId());
+        assertEquals(1, entity.getDishes().size());
+        assertEquals(OrderStatus.EN_PREPARACION, result.getStatus());
+        assertEquals(8L, result.getEmployeeId());
     }
 }

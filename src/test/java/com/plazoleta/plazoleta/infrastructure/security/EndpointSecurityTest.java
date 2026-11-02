@@ -384,6 +384,37 @@ class EndpointSecurityTest {
                 .andExpect(status().isBadRequest());
     }
 
+    // ---------- PATCH /orders/{id}/assign: solo EMPLOYEE (HU-13) ----------
+
+    @Test
+    void assignOrder_withoutToken_returns401() throws Exception {
+        mockMvc.perform(patch("/orders/1/assign")).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "CLIENT"})
+    void assignOrder_withNonEmployeeRole_returns403(String role) throws Exception {
+        mockMvc.perform(patch("/orders/1/assign").header(HttpHeaders.AUTHORIZATION, bearer(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void assignOrder_withEmployeeRole_returnsOrderInPreparation() throws Exception {
+        when(orderHandler.assignOrder(1L)).thenReturn(
+                new OrderResponseDto(1L, 30L, 10L, null, "EN_PREPARACION", 2L, List.of()));
+
+        mockMvc.perform(patch("/orders/1/assign").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("EN_PREPARACION"))
+                .andExpect(jsonPath("$.employeeId").value(2));
+    }
+
+    @Test
+    void assignOrder_withNonNumericId_returns400() throws Exception {
+        mockMvc.perform(patch("/orders/abc/assign").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isBadRequest());
+    }
+
     // ---------- GET /restaurants/{id}: cualquier usuario autenticado (HU-6) ----------
 
     @Test

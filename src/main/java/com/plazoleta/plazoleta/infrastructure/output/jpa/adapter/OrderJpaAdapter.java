@@ -16,6 +16,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 public class OrderJpaAdapter implements IOrderPersistencePort {
@@ -56,6 +57,19 @@ public class OrderJpaAdapter implements IOrderPersistencePort {
                 : orderRepository.findByRestaurant_IdAndStatus(restaurantId, status, pageRequest);
         return new PageResult<>(result.getContent().stream().map(this::toOrder).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+    }
+
+    @Override
+    public Optional<Order> findById(Long orderId) {
+        return orderRepository.findById(orderId).map(this::toOrder);
+    }
+
+    @Override
+    public Order updateOrder(Order order) {
+        OrderEntity entity = orderRepository.findById(order.getId()).orElseThrow();
+        entity.setStatus(order.getStatus());
+        entity.setEmployeeId(order.getEmployeeId());
+        return toOrder(orderRepository.save(entity));
     }
 
     private Order toOrder(OrderEntity entity) {

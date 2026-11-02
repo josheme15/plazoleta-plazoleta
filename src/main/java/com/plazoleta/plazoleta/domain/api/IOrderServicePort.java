@@ -17,4 +17,9 @@ public interface IOrderServicePort {
      * @param status estado por el que filtrar, o {@code null} para traer todos.
      */
     PageResult<Order> listRestaurantOrders(OrderStatus status, Integer page, Integer size);
+
+    /**
+     * El empleado autenticado se asigna un pedido PENDIENTE de su restaurante, que pasa a EN_PREPARACION.
+     */
+    Order assignOrder(Long orderId);
 }
