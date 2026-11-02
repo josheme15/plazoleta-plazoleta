@@ -11,8 +11,10 @@ public class Order {
     private Long restaurantId;
     private LocalDateTime date;
     private OrderStatus status;
-    // Empleado que atiende el pedido; se asigna en una HU posterior.
+    // Empleado que se asigno el pedido (HU-13).
     private Long employeeId;
+    // PIN de seguridad que el cliente presenta para reclamar el pedido listo (HU-14).
+    private String pin;
     private List<OrderDish> dishes = new ArrayList<>();
 
     public Order() {
@@ -46,6 +48,9 @@ public class Order {
 
     public Long getEmployeeId() { return employeeId; }
     public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
+
+    public String getPin() { return pin; }
+    public void setPin(String pin) { this.pin = pin; }
 
     public List<OrderDish> getDishes() { return dishes; }
     public void setDishes(List<OrderDish> dishes) { this.dishes = dishes; }

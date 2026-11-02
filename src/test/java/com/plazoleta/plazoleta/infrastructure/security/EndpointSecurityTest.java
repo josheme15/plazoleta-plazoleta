@@ -10,11 +10,15 @@ import com.plazoleta.plazoleta.application.dto.response.RestaurantResponseDto;
 import com.plazoleta.plazoleta.application.handler.IDishHandler;
 import com.plazoleta.plazoleta.application.handler.IOrderHandler;
 import com.plazoleta.plazoleta.application.handler.IRestaurantHandler;
+import com.plazoleta.plazoleta.domain.exception.ClientNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
 import com.plazoleta.plazoleta.domain.model.OrderStatus;
 import com.plazoleta.plazoleta.infrastructure.input.rest.DishRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.OrderRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantMenuRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantRestController;
+import com.plazoleta.plazoleta.infrastructure.output.client.exception.MessagingServiceUnavailableException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -429,5 +433,70 @@ class EndpointSecurityTest {
 
         mockMvc.perform(get("/restaurants/1").header(HttpHeaders.AUTHORIZATION, bearer(role)))
                 .andExpect(status().isOk());
+    }
+
+    // ---------- PATCH /orders/{id}/ready: solo EMPLOYEE (HU-14) ----------
+
+    @Test
+    void markOrderReady_withoutToken_returns401() throws Exception {
+        mockMvc.perform(patch("/orders/1/ready")).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "CLIENT"})
+    void markOrderReady_withNonEmployeeRole_returns403(String role) throws Exception {
+        mockMvc.perform(patch("/orders/1/ready").header(HttpHeaders.AUTHORIZATION, bearer(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void markOrderReady_withEmployeeRole_returnsReadyOrderWithoutPin() throws Exception {
+        when(orderHandler.markOrderReady(1L)).thenReturn(
+                new OrderResponseDto(1L, 30L, 10L, null, "LISTO", 2L, List.of()));
+
+        mockMvc.perform(patch("/orders/1/ready").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LISTO"))
+                .andExpect(jsonPath("$.pin").doesNotExist());
+    }
+
+    @Test
+    void markOrderReady_withNonNumericId_returns400() throws Exception {
+        mockMvc.perform(patch("/orders/abc/ready").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void markOrderReady_whenOrderIsNotInPreparation_returns409() throws Exception {
+        when(orderHandler.markOrderReady(1L)).thenThrow(new OrderNotInPreparationException());
+
+        mockMvc.perform(patch("/orders/1/ready").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void markOrderReady_whenEmployeeIsNotAssigned_returns403() throws Exception {
+        when(orderHandler.markOrderReady(1L)).thenThrow(new NotAssignedEmployeeException());
+
+        mockMvc.perform(patch("/orders/1/ready").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Solo el empleado asignado al pedido puede marcarlo como LISTO"));
+    }
+
+    @Test
+    void markOrderReady_whenClientDoesNotExist_returns404() throws Exception {
+        when(orderHandler.markOrderReady(1L)).thenThrow(new ClientNotFoundException());
+
+        mockMvc.perform(patch("/orders/1/ready").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void markOrderReady_whenMessagingIsDown_returns503() throws Exception {
+        when(orderHandler.markOrderReady(1L))
+                .thenThrow(new MessagingServiceUnavailableException(new IllegalStateException("caido")));
+
+        mockMvc.perform(patch("/orders/1/ready").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
+                .andExpect(status().isServiceUnavailable());
     }
 }

@@ -18,6 +18,7 @@ Responsable de restaurantes, platos y pedidos.
 | HU-11 | Realizar pedido | `POST /orders` | CLIENT |
 | HU-12 | Pedidos del restaurante con filtro por estado | `GET /orders?status=PENDIENTE&page=0&size=10` | EMPLOYEE |
 | HU-13 | Pedido "en preparación": asignarse un pedido | `PATCH /orders/{id}/assign` (+ listado `GET /orders`) | EMPLOYEE |
+| HU-14 | Pedido listo: notificar al cliente por SMS con un PIN | `PATCH /orders/{id}/ready` | EMPLOYEE (asignado al pedido) |
 
 ### Reglas de la HU-2
 
@@ -42,6 +43,20 @@ Responsable de restaurantes, platos y pedidos.
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-14
+
+- **Marcar pedido como listo** con `PATCH /orders/{id}/ready` (solo rol `EMPLOYEE`, sin body).
+- Solo el **empleado asignado** al pedido (HU-13) puede marcarlo (403 si es otro empleado), solo pedidos
+  **del restaurante del empleado** (403) y en estado **`EN_PREPARACION`** (409). Pedido inexistente: 404.
+- Se genera un **PIN de seguridad de 6 dígitos** (aleatorio con `SecureRandom`) y se envía por **SMS al
+  celular del cliente**: plazoleta consulta el celular en `plazoleta-usuarios` (`GET /users/{id}`) y envía
+  el SMS con `plazoleta-mensajeria` (`POST /sms`). Mensaje:
+  `Tu pedido #10 esta listo. Presenta este PIN para reclamarlo: 074891`.
+- El PIN se guarda en el pedido (columna `pin`) para validarlo al entregar, pero **no se devuelve** en la
+  respuesta: el cliente solo lo recibe por SMS.
+- Primero se envía el SMS y después se guarda el pedido como **`LISTO`**: si el SMS no se puede enviar
+  (mensajería caída), el pedido **sigue `EN_PREPARACION`** y se responde 503 para reintentar.
 
 ### Reglas de la HU-13
 
@@ -143,13 +158,17 @@ Categorías precargadas al iniciar el servicio:
 | 4 | Bebidas |
 | 5 | Acompanamientos |
 
-## Dependencia con plazoleta-usuarios
+## Dependencia con plazoleta-usuarios y plazoleta-mensajeria
 
 Este servicio **no emite tokens**: valida los JWT emitidos por `plazoleta-usuarios` (misma `JWT_SECRET`)
-y consulta `GET /users/{id}` en ese servicio, reenviando el token, para validar el rol del propietario.
+y consulta `GET /users/{id}` en ese servicio, reenviando el token, para validar el rol del propietario
+(HU-2) y obtener el celular del cliente (HU-14). Para notificar que un pedido está listo llama a
+`POST /sms` de `plazoleta-mensajeria`, también reenviando el token del empleado.
 
 ```
-Admin ──POST /restaurants (JWT)──► plazoleta ──GET /users/{id} (JWT)──► usuarios
+Admin ────POST /restaurants (JWT)────► plazoleta ──GET /users/{id} (JWT)──► usuarios
+Empleado ─PATCH /orders/{id}/ready──► plazoleta ──GET /users/{id} (JWT)──► usuarios
+                                                └─POST /sms (JWT)───────► mensajeria
 ```
 
 ## Requisitos
@@ -158,6 +177,7 @@ Admin ──POST /restaurants (JWT)──► plazoleta ──GET /users/{id} (JW
 - Maven 3.9+
 - Docker (para PostgreSQL)
 - `plazoleta-usuarios` en ejecución (puerto 8081)
+- `plazoleta-mensajeria` en ejecución (puerto 8083) para la HU-14
 
 ## Cómo levantarlo
 
@@ -178,6 +198,7 @@ OpenAPI JSON: http://localhost:8082/v3/api-docs
 | `DB_USERNAME` / `DB_PASSWORD` | `postgres` / `postgres` |
 | `JWT_SECRET` | misma clave que `plazoleta-usuarios` |
 | `USUARIOS_URL` | `http://localhost:8081` |
+| `MENSAJERIA_URL` | `http://localhost:8083` |
 
 ## Uso rápido
 
@@ -222,13 +243,16 @@ curl "http://localhost:8082/orders?status=PENDIENTE&page=0&size=10" -H "Authoriz
 
 # 10. Asignarse un pedido como EMPLEADO (pasa a EN_PREPARACION)
 curl -X PATCH http://localhost:8082/orders/1/assign -H "Authorization: Bearer <TOKEN_EMPLEADO>"
+
+# 11. Marcar el pedido como listo (pasa a LISTO y el cliente recibe el PIN por SMS)
+curl -X PATCH http://localhost:8082/orders/1/ready -H "Authorization: Bearer <TOKEN_EMPLEADO>"
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 123 peticiones y 282 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 139 peticiones y 306 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -247,19 +271,24 @@ se pueda hacer otro mientras el primero esté en proceso.
 filtro de estado (el pedido del otro restaurante no aparece).
 `11 - HU-13` el empleado se asigna el pedido de la carpeta 09, que pasa a EN_PREPARACION con su id como
 empleado asignado; también prueba reasignar (409) y asignarse un pedido de otro restaurante (403).
+`12 - HU-14` (requiere `plazoleta-mensajeria` levantado) crea un segundo empleado, un cliente y un pedido
+PENDIENTE; prueba los errores (pedido PENDIENTE 409, otro empleado 403, otro restaurante 403, 404, 400,
+roles y token) y marca como LISTO el pedido de la carpeta 09. El SMS con el PIN se ve en la consola de
+`plazoleta-mensajeria` (`[SMS SIMULADO] Para: ... | Mensaje: ...`).
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
 
 ```
-domain/            Java puro: modelos Restaurant y Dish, puertos (api / spi), casos de uso, excepciones
+domain/            Java puro: modelos (Restaurant, Dish, Order...), puertos (api / spi), casos de uso, excepciones
 application/       DTOs, mappers (MapStruct) y handlers
-infrastructure/    Controller REST, adaptador JPA, cliente HTTP a usuarios, seguridad JWT,
+infrastructure/    Controller REST, adaptador JPA, clientes HTTP a usuarios y mensajeria, seguridad JWT,
                    manejo de errores y configuración
 ```
 
 El caso de uso valida el rol del propietario a través del puerto `IUserClientPort`;
 su implementación (`UserRestClientAdapter`) usa `RestClient` para llamar al microservicio de usuarios.
+El envío del SMS de la HU-14 pasa por el puerto `ISmsClientPort`, implementado por `SmsRestClientAdapter`.
 
 ## Pruebas
 

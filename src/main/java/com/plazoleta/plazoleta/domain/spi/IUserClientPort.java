@@ -11,4 +11,9 @@ public interface IUserClientPort {
      * @return el rol del usuario (ej. "OWNER") o vacio si el usuario no existe.
      */
     Optional<String> findUserRoleById(Long userId);
+
+    /**
+     * @return el celular del usuario o vacio si el usuario no existe.
+     */
+    Optional<String> findUserPhoneById(Long userId);
 }
