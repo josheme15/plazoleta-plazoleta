@@ -68,4 +68,14 @@ class OrderHandlerTest {
         assertEquals(6, result.getTotalElements());
         assertEquals(2, result.getTotalPages());
     }
+
+    @Test
+    void assignOrder_callsDomainAndMapsResponse() {
+        Order assigned = new Order();
+        OrderResponseDto response = new OrderResponseDto();
+        when(orderServicePort.assignOrder(100L)).thenReturn(assigned);
+        when(orderResponseMapper.toResponse(assigned)).thenReturn(response);
+
+        assertSame(response, orderHandler.assignOrder(100L));
+    }
 }
