@@ -1,6 +1,7 @@
 package com.plazoleta.plazoleta.domain.usecase;
 
 import com.plazoleta.plazoleta.domain.exception.ClientHasActiveOrderException;
+import com.plazoleta.plazoleta.domain.exception.ClientNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DishFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.DishNotAvailableException;
 import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
@@ -8,8 +9,10 @@ import com.plazoleta.plazoleta.domain.exception.DuplicateDishInOrderException;
 import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidQuantityException;
+import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
 import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotPendingException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
@@ -23,6 +26,8 @@ import com.plazoleta.plazoleta.domain.spi.IAuthenticatedUserPort;
 import com.plazoleta.plazoleta.domain.spi.IDishPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IOrderPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
+import com.plazoleta.plazoleta.domain.spi.ISmsClientPort;
+import com.plazoleta.plazoleta.domain.spi.IUserClientPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,16 +42,21 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,13 +81,19 @@ class OrderUseCaseTest {
     @Mock
     private IAuthenticatedUserPort authenticatedUserPort;
 
+    @Mock
+    private IUserClientPort userClientPort;
+
+    @Mock
+    private ISmsClientPort smsClientPort;
+
     private OrderUseCase orderUseCase;
 
     @BeforeEach
     void setUp() {
         Clock fixedClock = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         orderUseCase = new OrderUseCase(orderPersistencePort, restaurantPersistencePort, dishPersistencePort,
-                authenticatedUserPort, fixedClock);
+                authenticatedUserPort, userClientPort, smsClientPort, fixedClock);
     }
 
     private Order order(OrderDish... dishes) {
@@ -363,6 +379,133 @@ class OrderUseCaseTest {
     @Test
     void assignOrder_withNullId_throwsException() {
         assertThrows(RequiredFieldException.class, () -> orderUseCase.assignOrder(null));
+        verify(orderPersistencePort, never()).findById(any());
+    }
+
+    // ---------- HU-14: pedido listo (pasa a LISTO y se notifica al cliente con un PIN) ----------
+
+    private static final String CLIENT_PHONE = "+573005698325";
+
+    private Order orderInPreparation(Long employeeId) {
+        Order order = storedOrder(RESTAURANT_ID, OrderStatus.EN_PREPARACION);
+        order.setEmployeeId(employeeId);
+        return order;
+    }
+
+    private void givenAssignedEmployeeWithOrderInPreparation() {
+        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(EMPLOYEE_ID);
+        when(orderPersistencePort.findById(ORDER_ID)).thenAnswer(inv -> Optional.of(orderInPreparation(EMPLOYEE_ID)));
+    }
+
+    @Test
+    void markOrderReady_assignedEmployee_sendsPinBySmsAndMovesToReady() {
+        givenAssignedEmployeeWithOrderInPreparation();
+        when(userClientPort.findUserPhoneById(CLIENT_ID)).thenReturn(Optional.of(CLIENT_PHONE));
+        when(orderPersistencePort.updateOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Order result = orderUseCase.markOrderReady(ORDER_ID);
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderPersistencePort).updateOrder(orderCaptor.capture());
+        Order saved = orderCaptor.getValue();
+        assertEquals(OrderStatus.LISTO, saved.getStatus());
+        assertEquals(EMPLOYEE_ID, saved.getEmployeeId());
+        assertTrue(saved.getPin().matches("\\d{6}"));
+
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(smsClientPort).sendSms(eq(CLIENT_PHONE), messageCaptor.capture());
+        assertEquals("Tu pedido #" + ORDER_ID + " esta listo. Presenta este PIN para reclamarlo: " + saved.getPin(),
+                messageCaptor.getValue());
+        assertSame(saved, result);
+    }
+
+    @Test
+    void markOrderReady_generatesRandomPins() {
+        givenAssignedEmployeeWithOrderInPreparation();
+        when(userClientPort.findUserPhoneById(CLIENT_ID)).thenReturn(Optional.of(CLIENT_PHONE));
+        when(orderPersistencePort.updateOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Set<String> pins = new HashSet<>();
+        for (int i = 0; i < 20; i++) {
+            pins.add(orderUseCase.markOrderReady(ORDER_ID).getPin());
+        }
+
+        assertTrue(pins.size() > 1);
+    }
+
+    @Test
+    void markOrderReady_whenSmsFails_orderIsNotUpdated() {
+        givenAssignedEmployeeWithOrderInPreparation();
+        when(userClientPort.findUserPhoneById(CLIENT_ID)).thenReturn(Optional.of(CLIENT_PHONE));
+        doThrow(new IllegalStateException("mensajeria caida")).when(smsClientPort).sendSms(anyString(), anyString());
+
+        assertThrows(IllegalStateException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
+        verify(orderPersistencePort, never()).updateOrder(any());
+    }
+
+    @Test
+    void markOrderReady_whenClientDoesNotExist_throwsException() {
+        givenAssignedEmployeeWithOrderInPreparation();
+        when(userClientPort.findUserPhoneById(CLIENT_ID)).thenReturn(Optional.empty());
+
+        assertThrows(ClientNotFoundException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
+        verify(smsClientPort, never()).sendSms(anyString(), anyString());
+        verify(orderPersistencePort, never()).updateOrder(any());
+    }
+
+    @Test
+    void markOrderReady_whenEmployeeIsNotTheAssignedOne_throwsException() {
+        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(EMPLOYEE_ID);
+        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(orderInPreparation(99L)));
+
+        assertThrows(NotAssignedEmployeeException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
+        verify(userClientPort, never()).findUserPhoneById(any());
+        verify(smsClientPort, never()).sendSms(anyString(), anyString());
+        verify(orderPersistencePort, never()).updateOrder(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = {"PENDIENTE", "LISTO", "ENTREGADO", "CANCELADO"})
+    void markOrderReady_whenOrderIsNotInPreparation_throwsException(OrderStatus status) {
+        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
+        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(RESTAURANT_ID, status)));
+
+        assertThrows(OrderNotInPreparationException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
+        verify(smsClientPort, never()).sendSms(anyString(), anyString());
+        verify(orderPersistencePort, never()).updateOrder(any());
+    }
+
+    @Test
+    void markOrderReady_whenOrderIsFromAnotherRestaurant_throwsException() {
+        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
+        when(orderPersistencePort.findById(ORDER_ID))
+                .thenReturn(Optional.of(storedOrder(OTHER_RESTAURANT_ID, OrderStatus.EN_PREPARACION)));
+
+        assertThrows(OrderFromAnotherRestaurantException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
+        verify(smsClientPort, never()).sendSms(anyString(), anyString());
+    }
+
+    @Test
+    void markOrderReady_whenOrderDoesNotExist_throwsException() {
+        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
+        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.empty());
+
+        assertThrows(OrderNotFoundException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
+    }
+
+    @Test
+    void markOrderReady_whenEmployeeHasNoRestaurant_throwsException() {
+        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(null);
+
+        assertThrows(EmployeeWithoutRestaurantException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
+        verify(orderPersistencePort, never()).findById(any());
+    }
+
+    @Test
+    void markOrderReady_withNullId_throwsException() {
+        assertThrows(RequiredFieldException.class, () -> orderUseCase.markOrderReady(null));
         verify(orderPersistencePort, never()).findById(any());
     }
 }

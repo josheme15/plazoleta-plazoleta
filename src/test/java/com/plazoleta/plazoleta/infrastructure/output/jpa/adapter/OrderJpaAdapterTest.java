@@ -193,4 +193,20 @@ class OrderJpaAdapterTest {
         assertEquals(OrderStatus.EN_PREPARACION, result.getStatus());
         assertEquals(8L, result.getEmployeeId());
     }
+
+    @Test
+    void updateOrder_savesPinAndReadyStatus() {
+        OrderEntity entity = savedOrderEntity();
+        when(orderRepository.findById(100L)).thenReturn(Optional.of(entity));
+        when(orderRepository.save(entity)).thenReturn(entity);
+        Order changes = new Order(100L, 30L, 10L, DATE, OrderStatus.LISTO, 8L, List.of());
+        changes.setPin("004821");
+
+        Order result = adapter.updateOrder(changes);
+
+        assertEquals("004821", entity.getPin());
+        assertEquals(OrderStatus.LISTO, entity.getStatus());
+        assertEquals("004821", result.getPin());
+        assertEquals(OrderStatus.LISTO, result.getStatus());
+    }
 }

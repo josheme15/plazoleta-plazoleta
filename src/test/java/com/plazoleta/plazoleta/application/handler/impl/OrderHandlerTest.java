@@ -78,4 +78,14 @@ class OrderHandlerTest {
 
         assertSame(response, orderHandler.assignOrder(100L));
     }
+
+    @Test
+    void markOrderReady_callsDomainAndMapsResponse() {
+        Order ready = new Order();
+        OrderResponseDto response = new OrderResponseDto();
+        when(orderServicePort.markOrderReady(100L)).thenReturn(ready);
+        when(orderResponseMapper.toResponse(ready)).thenReturn(response);
+
+        assertSame(response, orderHandler.markOrderReady(100L));
+    }
 }
