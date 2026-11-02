@@ -69,6 +69,7 @@ public class OrderJpaAdapter implements IOrderPersistencePort {
         OrderEntity entity = orderRepository.findById(order.getId()).orElseThrow();
         entity.setStatus(order.getStatus());
         entity.setEmployeeId(order.getEmployeeId());
+        entity.setPin(order.getPin());
         return toOrder(orderRepository.save(entity));
     }
 
@@ -76,7 +77,9 @@ public class OrderJpaAdapter implements IOrderPersistencePort {
         List<OrderDish> dishes = entity.getDishes().stream()
                 .map(item -> new OrderDish(item.getDish().getId(), item.getQuantity()))
                 .toList();
-        return new Order(entity.getId(), entity.getClientId(), entity.getRestaurant().getId(), entity.getDate(),
-                entity.getStatus(), entity.getEmployeeId(), dishes);
+        Order order = new Order(entity.getId(), entity.getClientId(), entity.getRestaurant().getId(),
+                entity.getDate(), entity.getStatus(), entity.getEmployeeId(), dishes);
+        order.setPin(entity.getPin());
+        return order;
     }
 }

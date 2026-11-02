@@ -22,4 +22,10 @@ public interface IOrderServicePort {
      * El empleado autenticado se asigna un pedido PENDIENTE de su restaurante, que pasa a EN_PREPARACION.
      */
     Order assignOrder(Long orderId);
+
+    /**
+     * El empleado asignado marca su pedido EN_PREPARACION como LISTO: se genera un PIN de seguridad y se envia
+     * por SMS al celular del cliente.
+     */
+    Order markOrderReady(Long orderId);
 }
