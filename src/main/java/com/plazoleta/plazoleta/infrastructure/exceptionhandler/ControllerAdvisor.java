@@ -13,6 +13,7 @@ import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantExcept
 import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotPendingException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotReadyException;
 import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.infrastructure.output.client.exception.MessagingServiceUnavailableException;
@@ -31,7 +32,8 @@ import java.util.List;
 public class ControllerAdvisor {
 
     @ExceptionHandler({NitAlreadyExistsException.class, ClientHasActiveOrderException.class,
-            OrderNotPendingException.class, OrderNotInPreparationException.class})
+            OrderNotPendingException.class, OrderNotInPreparationException.class,
+            OrderNotReadyException.class})
     public ResponseEntity<ErrorResponse> handleConflict(DomainException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }

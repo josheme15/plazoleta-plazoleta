@@ -1,5 +1,6 @@
 package com.plazoleta.plazoleta.infrastructure.input.rest;
 
+import com.plazoleta.plazoleta.application.dto.request.OrderDeliveryRequestDto;
 import com.plazoleta.plazoleta.application.dto.request.OrderRequestDto;
 import com.plazoleta.plazoleta.application.dto.response.OrderResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
@@ -144,5 +145,32 @@ public class OrderRestController {
     @PatchMapping("/{id}/ready")
     public ResponseEntity<OrderResponseDto> markOrderReady(@PathVariable Long id) {
         return ResponseEntity.ok(orderHandler.markOrderReady(id));
+    }
+
+    @Operation(summary = "Entregar pedido (pasa a ENTREGADO)",
+            description = "El empleado entrega un pedido LISTO de su restaurante. Debe enviar el PIN de seguridad que "
+                    + "el cliente recibio por SMS (HU-14) para reclamar su pedido. El pedido pasa a ENTREGADO, estado "
+                    + "final: ya no se puede cambiar a ningun otro estado. Solo disponible para el rol EMPLEADO.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pedido entregado",
+                    content = @Content(schema = @Schema(implementation = OrderResponseDto.class))),
+            @ApiResponse(responseCode = "400",
+                    description = "PIN faltante, con formato invalido (6 digitos) o incorrecto, o id no numerico",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, invalido o expirado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403",
+                    description = "El usuario no es EMPLEADO, no tiene restaurante o el pedido es de otro restaurante",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No existe un pedido con el id indicado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "El pedido no esta LISTO (por ejemplo, ya fue entregado)",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PatchMapping("/{id}/deliver")
+    public ResponseEntity<OrderResponseDto> deliverOrder(
+            @PathVariable Long id, @Valid @RequestBody OrderDeliveryRequestDto orderDeliveryRequestDto) {
+        return ResponseEntity.ok(orderHandler.deliverOrder(id, orderDeliveryRequestDto));
     }
 }

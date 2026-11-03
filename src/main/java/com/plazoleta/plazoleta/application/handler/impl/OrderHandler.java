@@ -1,5 +1,6 @@
 package com.plazoleta.plazoleta.application.handler.impl;
 
+import com.plazoleta.plazoleta.application.dto.request.OrderDeliveryRequestDto;
 import com.plazoleta.plazoleta.application.dto.request.OrderRequestDto;
 import com.plazoleta.plazoleta.application.dto.response.OrderResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
@@ -44,5 +45,11 @@ public class OrderHandler implements IOrderHandler {
     @Override
     public OrderResponseDto markOrderReady(Long orderId) {
         return orderResponseMapper.toResponse(orderServicePort.markOrderReady(orderId));
+    }
+
+    @Override
+    public OrderResponseDto deliverOrder(Long orderId, OrderDeliveryRequestDto orderDeliveryRequestDto) {
+        return orderResponseMapper.toResponse(
+                orderServicePort.deliverOrder(orderId, orderDeliveryRequestDto.getPin()));
     }
 }
