@@ -173,4 +173,30 @@ public class OrderRestController {
             @PathVariable Long id, @Valid @RequestBody OrderDeliveryRequestDto orderDeliveryRequestDto) {
         return ResponseEntity.ok(orderHandler.deliverOrder(id, orderDeliveryRequestDto));
     }
+
+    @Operation(summary = "Cancelar pedido (pasa a CANCELADO)",
+            description = "El cliente autenticado cancela uno de sus pedidos, por cualquier razon. Solo se pueden "
+                    + "cancelar pedidos en estado PENDIENTE; en cualquier otro estado se responde: \"Lo sentimos, tu "
+                    + "pedido ya está en preparación y no se puede cancelar\". Solo disponible para el rol CLIENTE.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pedido cancelado",
+                    content = @Content(schema = @Schema(implementation = OrderResponseDto.class))),
+            @ApiResponse(responseCode = "400", description = "El id del pedido no es numerico",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, invalido o expirado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "El usuario no es CLIENTE o el pedido es de otro cliente",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No existe un pedido con el id indicado",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409",
+                    description = "El pedido no esta PENDIENTE: \"Lo sentimos, tu pedido ya está en preparación y no "
+                            + "se puede cancelar\"",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<OrderResponseDto> cancelOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(orderHandler.cancelOrder(id));
+    }
 }
