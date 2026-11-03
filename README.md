@@ -19,6 +19,7 @@ Responsable de restaurantes, platos y pedidos.
 | HU-12 | Pedidos del restaurante con filtro por estado | `GET /orders?status=PENDIENTE&page=0&size=10` | EMPLOYEE |
 | HU-13 | Pedido "en preparación": asignarse un pedido | `PATCH /orders/{id}/assign` (+ listado `GET /orders`) | EMPLOYEE |
 | HU-14 | Pedido listo: notificar al cliente por SMS con un PIN | `PATCH /orders/{id}/ready` | EMPLOYEE (asignado al pedido) |
+| HU-15 | Pedido entregado validando el PIN del cliente | `PATCH /orders/{id}/deliver` | EMPLOYEE |
 
 ### Reglas de la HU-2
 
@@ -43,6 +44,18 @@ Responsable de restaurantes, platos y pedidos.
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-15
+
+- **Entregar un pedido** con `PATCH /orders/{id}/deliver` (solo rol `EMPLOYEE`) enviando el PIN de seguridad
+  que el cliente recibió por SMS en la HU-14: `{"pin": "482913"}`.
+- Solo los pedidos en estado **`LISTO`** pueden pasar a **`ENTREGADO`** (409 en cualquier otro estado).
+- **`ENTREGADO` es un estado final**: ningún endpoint permite cambiarlo (asignarse 409, marcar listo 409,
+  entregar otra vez 409), porque cada cambio de estado exige un estado anterior distinto de `ENTREGADO`.
+- PIN obligatorio y de 6 dígitos (400); si no coincide con el del pedido: 400 `El PIN de seguridad es incorrecto`
+  y el pedido sigue `LISTO`.
+- Solo pedidos **del restaurante del empleado** (403). Pedido inexistente: 404. La HU no exige que lo entregue
+  el mismo empleado asignado, así que puede hacerlo cualquier empleado del restaurante.
 
 ### Reglas de la HU-14
 
@@ -246,13 +259,18 @@ curl -X PATCH http://localhost:8082/orders/1/assign -H "Authorization: Bearer <T
 
 # 11. Marcar el pedido como listo (pasa a LISTO y el cliente recibe el PIN por SMS)
 curl -X PATCH http://localhost:8082/orders/1/ready -H "Authorization: Bearer <TOKEN_EMPLEADO>"
+
+# 12. Entregar el pedido con el PIN que el cliente recibio por SMS (pasa a ENTREGADO)
+curl -X PATCH http://localhost:8082/orders/1/deliver \
+  -H "Authorization: Bearer <TOKEN_EMPLEADO>" -H "Content-Type: application/json" \
+  -d '{"pin":"482913"}'
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 139 peticiones y 306 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 154 peticiones y 331 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -275,6 +293,11 @@ empleado asignado; también prueba reasignar (409) y asignarse un pedido de otro
 PENDIENTE; prueba los errores (pedido PENDIENTE 409, otro empleado 403, otro restaurante 403, 404, 400,
 roles y token) y marca como LISTO el pedido de la carpeta 09. El SMS con el PIN se ve en la consola de
 `plazoleta-mensajeria` (`[SMS SIMULADO] Para: ... | Mensaje: ...`).
+`13 - HU-15` entrega ese pedido con el PIN. **Antes de ejecutarla**, copia el PIN del SMS de la consola de
+mensajería en la variable de colección `orderPin` (clic en la colección → **Variables**), porque el PIN no se
+devuelve en ninguna respuesta. Prueba PIN incorrecto, sin PIN y con formato inválido (400), pedido PENDIENTE
+(409), otro restaurante (403), roles y token; entrega el pedido (ENTREGADO) y comprueba que ya no se pueda
+entregar, asignar ni marcar listo otra vez (409).
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
