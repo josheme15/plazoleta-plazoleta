@@ -11,6 +11,8 @@ import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPinException;
 import com.plazoleta.plazoleta.domain.exception.InvalidQuantityException;
 import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
+import com.plazoleta.plazoleta.domain.exception.OrderCannotBeCancelledException;
+import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherClientException;
 import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
@@ -51,6 +53,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -609,6 +612,76 @@ class OrderUseCaseTest {
         assertThrows(OrderNotPendingException.class, () -> orderUseCase.assignOrder(ORDER_ID));
         assertThrows(OrderNotInPreparationException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
         assertThrows(OrderNotReadyException.class, () -> orderUseCase.deliverOrder(ORDER_ID, PIN));
+        verify(orderPersistencePort, never()).updateOrder(any());
+    }
+
+    // ---------- HU-16: cancelar pedido (solo PENDIENTE, solo el cliente duenio) ----------
+
+    @Test
+    void cancelOrder_pendingOrderOfTheClient_movesToCancelled() {
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(CLIENT_ID);
+        when(orderPersistencePort.findById(ORDER_ID))
+                .thenReturn(Optional.of(storedOrder(RESTAURANT_ID, OrderStatus.PENDIENTE)));
+        when(orderPersistencePort.updateOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Order result = orderUseCase.cancelOrder(ORDER_ID);
+
+        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+        verify(orderPersistencePort).updateOrder(captor.capture());
+        assertEquals(OrderStatus.CANCELADO, captor.getValue().getStatus());
+        assertEquals(CLIENT_ID, captor.getValue().getClientId());
+        assertSame(captor.getValue(), result);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = {"EN_PREPARACION", "LISTO", "ENTREGADO", "CANCELADO"})
+    void cancelOrder_whenOrderIsNotPending_throwsExceptionWithHuMessage(OrderStatus status) {
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(CLIENT_ID);
+        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(RESTAURANT_ID, status)));
+
+        OrderCannotBeCancelledException ex =
+                assertThrows(OrderCannotBeCancelledException.class, () -> orderUseCase.cancelOrder(ORDER_ID));
+        assertEquals("Lo sentimos, tu pedido ya está en preparación y no se puede cancelar", ex.getMessage());
+        verify(orderPersistencePort, never()).updateOrder(any());
+    }
+
+    @Test
+    void cancelOrder_whenOrderBelongsToAnotherClient_throwsException() {
+        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(99L);
+        when(orderPersistencePort.findById(ORDER_ID))
+                .thenReturn(Optional.of(storedOrder(RESTAURANT_ID, OrderStatus.PENDIENTE)));
+
+        assertThrows(OrderFromAnotherClientException.class, () -> orderUseCase.cancelOrder(ORDER_ID));
+        verify(orderPersistencePort, never()).updateOrder(any());
+    }
+
+    @Test
+    void cancelOrder_whenOrderDoesNotExist_throwsException() {
+        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.empty());
+
+        assertThrows(OrderNotFoundException.class, () -> orderUseCase.cancelOrder(ORDER_ID));
+        verify(orderPersistencePort, never()).updateOrder(any());
+    }
+
+    @Test
+    void cancelOrder_withNullId_throwsException() {
+        assertThrows(RequiredFieldException.class, () -> orderUseCase.cancelOrder(null));
+        verify(orderPersistencePort, never()).findById(any());
+    }
+
+    @Test
+    void cancelledOrder_isNotInProcess_soClientCanOrderAgain() {
+        assertTrue(OrderStatus.IN_PROCESS.contains(OrderStatus.PENDIENTE));
+        assertFalse(OrderStatus.IN_PROCESS.contains(OrderStatus.CANCELADO));
+    }
+
+    @Test
+    void cancelledOrder_cannotBeAssignedByEmployee() {
+        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
+        when(orderPersistencePort.findById(ORDER_ID))
+                .thenReturn(Optional.of(storedOrder(RESTAURANT_ID, OrderStatus.CANCELADO)));
+
+        assertThrows(OrderNotPendingException.class, () -> orderUseCase.assignOrder(ORDER_ID));
         verify(orderPersistencePort, never()).updateOrder(any());
     }
 }
