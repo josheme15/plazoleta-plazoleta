@@ -20,6 +20,7 @@ Responsable de restaurantes, platos y pedidos.
 | HU-13 | Pedido "en preparación": asignarse un pedido | `PATCH /orders/{id}/assign` (+ listado `GET /orders`) | EMPLOYEE |
 | HU-14 | Pedido listo: notificar al cliente por SMS con un PIN | `PATCH /orders/{id}/ready` | EMPLOYEE (asignado al pedido) |
 | HU-15 | Pedido entregado validando el PIN del cliente | `PATCH /orders/{id}/deliver` | EMPLOYEE |
+| HU-16 | Cancelar pedido | `PATCH /orders/{id}/cancel` | CLIENT (dueño del pedido) |
 
 ### Reglas de la HU-2
 
@@ -44,6 +45,18 @@ Responsable de restaurantes, platos y pedidos.
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-16
+
+- **Cancelar un pedido** con `PATCH /orders/{id}/cancel` (solo rol `CLIENT`, sin body): el pedido pasa a
+  **`CANCELADO`**.
+- Solo se pueden cancelar pedidos en estado **`PENDIENTE`**. En cualquier otro estado se responde **409** con el
+  mensaje de la HU: `Lo sentimos, tu pedido ya está en preparación y no se puede cancelar`.
+- El cliente sale del token: solo puede cancelar **sus propios pedidos** (403 si es de otro cliente).
+  Pedido inexistente: 404.
+- La notificación al usuario es el mensaje de la respuesta (la HU no pide SMS).
+- Un pedido `CANCELADO` ya no cuenta como "en proceso": el cliente puede hacer un pedido nuevo (HU-11) y ningún
+  empleado puede asignárselo (409).
 
 ### Reglas de la HU-15
 
@@ -264,13 +277,16 @@ curl -X PATCH http://localhost:8082/orders/1/ready -H "Authorization: Bearer <TO
 curl -X PATCH http://localhost:8082/orders/1/deliver \
   -H "Authorization: Bearer <TOKEN_EMPLEADO>" -H "Content-Type: application/json" \
   -d '{"pin":"482913"}'
+
+# 13. Cancelar un pedido PENDIENTE como CLIENTE (pasa a CANCELADO)
+curl -X PATCH http://localhost:8082/orders/1/cancel -H "Authorization: Bearer <TOKEN_CLIENTE>"
 ```
 
 ## Pruebas con Postman
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 154 peticiones y 331 aserciones.
+- `plazoleta-plazoleta.postman_collection.json`: 168 peticiones y 352 aserciones.
 - `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
@@ -298,6 +314,9 @@ mensajería en la variable de colección `orderPin` (clic en la colección → *
 devuelve en ninguna respuesta. Prueba PIN incorrecto, sin PIN y con formato inválido (400), pedido PENDIENTE
 (409), otro restaurante (403), roles y token; entrega el pedido (ENTREGADO) y comprueba que ya no se pueda
 entregar, asignar ni marcar listo otra vez (409).
+`14 - HU-16` registra un cliente con un pedido PENDIENTE y lo cancela (CANCELADO); prueba el mensaje de la HU
+al cancelar un pedido que ya no está PENDIENTE (409), otro cliente (403), roles y token, que no se pueda
+cancelar dos veces ni asignar un pedido cancelado (409) y que el cliente pueda hacer un pedido nuevo.
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
