@@ -99,4 +99,14 @@ class OrderHandlerTest {
 
         assertSame(response, orderHandler.deliverOrder(100L, new OrderDeliveryRequestDto("304930")));
     }
+
+    @Test
+    void cancelOrder_callsDomainAndMapsResponse() {
+        Order cancelled = new Order();
+        OrderResponseDto response = new OrderResponseDto();
+        when(orderServicePort.cancelOrder(100L)).thenReturn(cancelled);
+        when(orderResponseMapper.toResponse(cancelled)).thenReturn(response);
+
+        assertSame(response, orderHandler.cancelOrder(100L));
+    }
 }

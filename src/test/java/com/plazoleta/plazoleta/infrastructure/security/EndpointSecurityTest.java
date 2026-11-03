@@ -12,6 +12,8 @@ import com.plazoleta.plazoleta.application.handler.IOrderHandler;
 import com.plazoleta.plazoleta.application.handler.IRestaurantHandler;
 import com.plazoleta.plazoleta.domain.exception.ClientNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPinException;
+import com.plazoleta.plazoleta.domain.exception.OrderCannotBeCancelledException;
+import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherClientException;
 import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotReadyException;
@@ -566,5 +568,52 @@ class EndpointSecurityTest {
         mockMvc.perform(patch("/orders/1/deliver").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE"))
                         .contentType(MediaType.APPLICATION_JSON).content(PIN_BODY))
                 .andExpect(status().isConflict());
+    }
+
+    // ---------- PATCH /orders/{id}/cancel: solo CLIENT (HU-16) ----------
+
+    @Test
+    void cancelOrder_withoutToken_returns401() throws Exception {
+        mockMvc.perform(patch("/orders/1/cancel")).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "EMPLOYEE"})
+    void cancelOrder_withNonClientRole_returns403(String role) throws Exception {
+        mockMvc.perform(patch("/orders/1/cancel").header(HttpHeaders.AUTHORIZATION, bearer(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cancelOrder_withClientRole_returnsCancelledOrder() throws Exception {
+        when(orderHandler.cancelOrder(1L)).thenReturn(
+                new OrderResponseDto(1L, 30L, 10L, null, "CANCELADO", null, List.of()));
+
+        mockMvc.perform(patch("/orders/1/cancel").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADO"));
+    }
+
+    @Test
+    void cancelOrder_whenOrderIsNotPending_returns409WithHuMessage() throws Exception {
+        when(orderHandler.cancelOrder(1L)).thenThrow(new OrderCannotBeCancelledException());
+
+        mockMvc.perform(patch("/orders/1/cancel").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Lo sentimos, tu pedido ya está en preparación y no se puede cancelar"));
+    }
+
+    @Test
+    void cancelOrder_whenOrderBelongsToAnotherClient_returns403() throws Exception {
+        when(orderHandler.cancelOrder(1L)).thenThrow(new OrderFromAnotherClientException());
+
+        mockMvc.perform(patch("/orders/1/cancel").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cancelOrder_withNonNumericId_returns400() throws Exception {
+        mockMvc.perform(patch("/orders/abc/cancel").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isBadRequest());
     }
 }

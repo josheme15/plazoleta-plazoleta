@@ -34,4 +34,9 @@ public interface IOrderServicePort {
      * SMS. El pedido pasa a ENTREGADO, estado final que ya no se puede modificar.
      */
     Order deliverOrder(Long orderId, String pin);
+
+    /**
+     * El cliente autenticado cancela uno de sus pedidos. Solo se pueden cancelar pedidos PENDIENTE.
+     */
+    Order cancelOrder(Long orderId);
 }

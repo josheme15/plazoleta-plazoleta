@@ -12,6 +12,8 @@ import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPinException;
 import com.plazoleta.plazoleta.domain.exception.InvalidQuantityException;
 import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
+import com.plazoleta.plazoleta.domain.exception.OrderCannotBeCancelledException;
+import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherClientException;
 import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
@@ -145,6 +147,24 @@ public class OrderUseCase implements IOrderServicePort {
         }
 
         order.setStatus(OrderStatus.ENTREGADO);
+        return orderPersistencePort.updateOrder(order);
+    }
+
+    @Override
+    public Order cancelOrder(Long orderId) {
+        if (orderId == null) {
+            throw new RequiredFieldException("idPedido");
+        }
+        Order order = orderPersistencePort.findById(orderId).orElseThrow(OrderNotFoundException::new);
+        // El cliente sale del token: solo puede cancelar sus propios pedidos.
+        if (!authenticatedUserPort.getAuthenticatedUserId().equals(order.getClientId())) {
+            throw new OrderFromAnotherClientException();
+        }
+        if (order.getStatus() != OrderStatus.PENDIENTE) {
+            throw new OrderCannotBeCancelledException();
+        }
+
+        order.setStatus(OrderStatus.CANCELADO);
         return orderPersistencePort.updateOrder(order);
     }
 
