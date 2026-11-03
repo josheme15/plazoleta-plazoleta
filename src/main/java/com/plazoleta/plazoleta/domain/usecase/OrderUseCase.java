@@ -9,12 +9,14 @@ import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DuplicateDishInOrderException;
 import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
+import com.plazoleta.plazoleta.domain.exception.InvalidPinException;
 import com.plazoleta.plazoleta.domain.exception.InvalidQuantityException;
 import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
 import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotPendingException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotReadyException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.domain.model.Dish;
@@ -125,6 +127,24 @@ public class OrderUseCase implements IOrderServicePort {
 
         order.setPin(pin);
         order.setStatus(OrderStatus.LISTO);
+        return orderPersistencePort.updateOrder(order);
+    }
+
+    @Override
+    public Order deliverOrder(Long orderId, String pin) {
+        if (pin == null || pin.isBlank()) {
+            throw new RequiredFieldException("pin");
+        }
+        Order order = findEmployeeRestaurantOrder(orderId);
+        // Solo LISTO -> ENTREGADO. Como ENTREGADO no es LISTO, un pedido entregado nunca vuelve a cambiar de estado.
+        if (order.getStatus() != OrderStatus.LISTO) {
+            throw new OrderNotReadyException();
+        }
+        if (!pin.equals(order.getPin())) {
+            throw new InvalidPinException();
+        }
+
+        order.setStatus(OrderStatus.ENTREGADO);
         return orderPersistencePort.updateOrder(order);
     }
 

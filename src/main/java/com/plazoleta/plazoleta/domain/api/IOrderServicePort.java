@@ -28,4 +28,10 @@ public interface IOrderServicePort {
      * por SMS al celular del cliente.
      */
     Order markOrderReady(Long orderId);
+
+    /**
+     * El empleado entrega un pedido LISTO de su restaurante, validando el PIN de seguridad que el cliente recibio por
+     * SMS. El pedido pasa a ENTREGADO, estado final que ya no se puede modificar.
+     */
+    Order deliverOrder(Long orderId, String pin);
 }

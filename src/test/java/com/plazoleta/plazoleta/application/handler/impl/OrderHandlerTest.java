@@ -1,5 +1,6 @@
 package com.plazoleta.plazoleta.application.handler.impl;
 
+import com.plazoleta.plazoleta.application.dto.request.OrderDeliveryRequestDto;
 import com.plazoleta.plazoleta.application.dto.request.OrderDishRequestDto;
 import com.plazoleta.plazoleta.application.dto.request.OrderRequestDto;
 import com.plazoleta.plazoleta.application.dto.response.OrderResponseDto;
@@ -87,5 +88,15 @@ class OrderHandlerTest {
         when(orderResponseMapper.toResponse(ready)).thenReturn(response);
 
         assertSame(response, orderHandler.markOrderReady(100L));
+    }
+
+    @Test
+    void deliverOrder_passesPinToDomainAndMapsResponse() {
+        Order delivered = new Order();
+        OrderResponseDto response = new OrderResponseDto();
+        when(orderServicePort.deliverOrder(100L, "304930")).thenReturn(delivered);
+        when(orderResponseMapper.toResponse(delivered)).thenReturn(response);
+
+        assertSame(response, orderHandler.deliverOrder(100L, new OrderDeliveryRequestDto("304930")));
     }
 }
