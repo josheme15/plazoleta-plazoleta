@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Plazoleta - Plazoleta",
-    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere los microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d), y para la carpeta 12 tambien mensajeria (http://localhost:8083).\nCarpeta 13: antes de ejecutarla, copia en la variable de coleccion orderPin el PIN del SMS que muestra la consola de mensajeria al terminar la carpeta 12.\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 -> 05 HU-6 -> 06 HU-7 -> 07 HU-9 -> 08 HU-10 -> 09 HU-11 -> 10 HU-12 -> 11 HU-13 -> 12 HU-14 -> 13 HU-15 (usar el Collection Runner).",
+    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere los microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d), y para la carpeta 12 tambien mensajeria (http://localhost:8083).\nCarpeta 13: antes de ejecutarla, copia en la variable de coleccion orderPin el PIN del SMS que muestra la consola de mensajeria al terminar la carpeta 12.\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 -> 05 HU-6 -> 06 HU-7 -> 07 HU-9 -> 08 HU-10 -> 09 HU-11 -> 10 HU-12 -> 11 HU-13 -> 12 HU-14 -> 13 HU-15 -> 14 HU-16 (usar el Collection Runner).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -8061,6 +8061,608 @@
           ]
         }
       ]
+    },
+    {
+      "name": "14 - HU-16 Cancelar pedido",
+      "description": "PATCH /orders/{id}/cancel (solo CLIENTE, sin body). El cliente cancela uno de sus propios pedidos, solo si esta PENDIENTE. En cualquier otro estado responde 409 con el mensaje de la HU: \"Lo sentimos, tu pedido ya está en preparación y no se puede cancelar\". Crea su propio cliente y pedido; para el caso 409 usa el pedido de la carpeta 09, que ya no esta PENDIENTE.",
+      "item": [
+        {
+          "name": "Preparacion: registrar cliente (usuarios, 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/users/client",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "users",
+                "client"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Camila\",\n  \"lastName\": \"Torres\",\n  \"documentNumber\": \"{{hu16ClientDocument}}\",\n  \"phone\": \"+573156667788\",\n  \"email\": \"{{hu16ClientEmail}}\",\n  \"roleId\": 4,\n  \"password\": \"Clave123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const unique = Date.now().toString();",
+                  "pm.collectionVariables.set(\"hu16ClientDocument\", unique.slice(-10));",
+                  "pm.collectionVariables.set(\"hu16ClientEmail\", \"cliente_hu16_\" + unique + \"@correo.com\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparacion: login de ese cliente (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{usuariosUrl}}/auth/login",
+              "host": [
+                "{{usuariosUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hu16ClientEmail}}\",\n  \"password\": \"Clave123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"hu16ClientToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparacion: realizar pedido (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu16ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurantId\": {{restaurantId}},\n  \"dishes\": [\n    { \"dishId\": {{dishId}}, \"quantity\": 1 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"cancelOrderId\", pm.response.json().id);",
+                  "pm.test(\"El pedido queda PENDIENTE\", () => pm.expect(pm.response.json().status).to.eql(\"PENDIENTE\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pedido que ya no esta PENDIENTE (409)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{orderId}}",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{orderClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Mensaje: Lo sentimos, tu pedido ya está en preparación y no se puede cancelar\", () => pm.expect(pm.response.json().message).to.eql(\"Lo sentimos, tu pedido ya está en preparación y no se puede cancelar\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Otro cliente intenta cancelar el pedido (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{cancelOrderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{cancelOrderId}}",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu14ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Mensaje: El pedido no pertenece al cliente autenticado\", () => pm.expect(pm.response.json().message).to.eql(\"El pedido no pertenece al cliente autenticado\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pedido inexistente (404)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/999999999/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "999999999",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu16ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Id no numerico (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/abc/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "abc",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu16ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "EMPLEADO intenta cancelar un pedido (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{cancelOrderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{cancelOrderId}}",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PROPIETARIO intenta cancelar un pedido (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{cancelOrderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{cancelOrderId}}",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin token (401)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{cancelOrderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{cancelOrderId}}",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar pedido PENDIENTE (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{cancelOrderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{cancelOrderId}}",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu16ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Estado CANCELADO\", () => pm.expect(body.status).to.eql(\"CANCELADO\"));",
+                  "pm.test(\"Es el pedido del cliente\", () => pm.expect(body.id).to.eql(Number(pm.collectionVariables.get(\"cancelOrderId\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar otra vez el mismo pedido (409)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{cancelOrderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{cancelOrderId}}",
+                "cancel"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu16ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Mensaje: Lo sentimos, tu pedido ya está en preparación y no se puede cancelar\", () => pm.expect(pm.response.json().message).to.eql(\"Lo sentimos, tu pedido ya está en preparación y no se puede cancelar\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empleado no puede asignarse un pedido CANCELADO (409)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{cancelOrderId}}/assign",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{cancelOrderId}}",
+                "assign"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El cliente puede hacer un pedido nuevo (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu16ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurantId\": {{restaurantId}},\n  \"dishes\": [\n    { \"dishId\": {{dishId}}, \"quantity\": 1 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"El pedido cancelado ya no cuenta como pedido en proceso\", () => pm.expect(pm.response.json().status).to.eql(\"PENDIENTE\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -8238,6 +8840,22 @@
     },
     {
       "key": "wrongPin",
+      "value": ""
+    },
+    {
+      "key": "hu16ClientDocument",
+      "value": ""
+    },
+    {
+      "key": "hu16ClientEmail",
+      "value": ""
+    },
+    {
+      "key": "hu16ClientToken",
+      "value": ""
+    },
+    {
+      "key": "cancelOrderId",
       "value": ""
     }
   ]

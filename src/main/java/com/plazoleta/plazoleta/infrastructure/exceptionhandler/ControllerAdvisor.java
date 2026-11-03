@@ -9,6 +9,8 @@ import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantExcepti
 import com.plazoleta.plazoleta.domain.exception.NitAlreadyExistsException;
 import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
 import com.plazoleta.plazoleta.domain.exception.NotRestaurantOwnerException;
+import com.plazoleta.plazoleta.domain.exception.OrderCannotBeCancelledException;
+import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherClientException;
 import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
@@ -33,7 +35,7 @@ public class ControllerAdvisor {
 
     @ExceptionHandler({NitAlreadyExistsException.class, ClientHasActiveOrderException.class,
             OrderNotPendingException.class, OrderNotInPreparationException.class,
-            OrderNotReadyException.class})
+            OrderNotReadyException.class, OrderCannotBeCancelledException.class})
     public ResponseEntity<ErrorResponse> handleConflict(DomainException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
@@ -46,7 +48,8 @@ public class ControllerAdvisor {
     }
 
     @ExceptionHandler({NotRestaurantOwnerException.class, EmployeeWithoutRestaurantException.class,
-            OrderFromAnotherRestaurantException.class, NotAssignedEmployeeException.class})
+            OrderFromAnotherRestaurantException.class, NotAssignedEmployeeException.class,
+            OrderFromAnotherClientException.class})
     public ResponseEntity<ErrorResponse> handleNotRestaurantOwner(DomainException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
     }

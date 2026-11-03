@@ -48,6 +48,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/orders/*/ready").hasRole("EMPLOYEE")
                         // HU-15: el empleado entrega el pedido validando el PIN del cliente.
                         .requestMatchers(HttpMethod.PATCH, "/orders/*/deliver").hasRole("EMPLOYEE")
+                        // HU-16: el cliente cancela su propio pedido.
+                        .requestMatchers(HttpMethod.PATCH, "/orders/*/cancel").hasRole("CLIENT")
                         .requestMatchers(HttpMethod.POST, "/dishes").hasRole("OWNER")
                         .requestMatchers(HttpMethod.PATCH, "/dishes/*").hasRole("OWNER")
                         .requestMatchers(HttpMethod.PATCH, "/dishes/*/status").hasRole("OWNER")

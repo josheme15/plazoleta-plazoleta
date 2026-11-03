@@ -52,4 +52,9 @@ public class OrderHandler implements IOrderHandler {
         return orderResponseMapper.toResponse(
                 orderServicePort.deliverOrder(orderId, orderDeliveryRequestDto.getPin()));
     }
+
+    @Override
+    public OrderResponseDto cancelOrder(Long orderId) {
+        return orderResponseMapper.toResponse(orderServicePort.cancelOrder(orderId));
+    }
 }
