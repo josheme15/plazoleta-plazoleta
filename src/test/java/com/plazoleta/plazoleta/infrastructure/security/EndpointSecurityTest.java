@@ -11,8 +11,10 @@ import com.plazoleta.plazoleta.application.handler.IDishHandler;
 import com.plazoleta.plazoleta.application.handler.IOrderHandler;
 import com.plazoleta.plazoleta.application.handler.IRestaurantHandler;
 import com.plazoleta.plazoleta.domain.exception.ClientNotFoundException;
+import com.plazoleta.plazoleta.domain.exception.InvalidPinException;
 import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
 import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
+import com.plazoleta.plazoleta.domain.exception.OrderNotReadyException;
 import com.plazoleta.plazoleta.domain.model.OrderStatus;
 import com.plazoleta.plazoleta.infrastructure.input.rest.DishRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.OrderRestController;
@@ -39,6 +41,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -498,5 +501,70 @@ class EndpointSecurityTest {
 
         mockMvc.perform(patch("/orders/1/ready").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE")))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    // ---------- PATCH /orders/{id}/deliver: solo EMPLOYEE (HU-15) ----------
+
+    private static final String PIN_BODY = "{\"pin\":\"304930\"}";
+
+    @Test
+    void deliverOrder_withoutToken_returns401() throws Exception {
+        mockMvc.perform(patch("/orders/1/deliver").contentType(MediaType.APPLICATION_JSON).content(PIN_BODY))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "OWNER", "CLIENT"})
+    void deliverOrder_withNonEmployeeRole_returns403(String role) throws Exception {
+        mockMvc.perform(patch("/orders/1/deliver").header(HttpHeaders.AUTHORIZATION, bearer(role))
+                        .contentType(MediaType.APPLICATION_JSON).content(PIN_BODY))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void deliverOrder_withEmployeeRoleAndPin_returnsDeliveredOrder() throws Exception {
+        when(orderHandler.deliverOrder(eq(1L), any())).thenReturn(
+                new OrderResponseDto(1L, 30L, 10L, null, "ENTREGADO", 2L, List.of()));
+
+        mockMvc.perform(patch("/orders/1/deliver").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON).content(PIN_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ENTREGADO"))
+                .andExpect(jsonPath("$.pin").doesNotExist());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"pin\":\"\"}", "{\"pin\":\"12345\"}", "{\"pin\":\"1234567\"}",
+            "{\"pin\":\"12a456\"}"})
+    void deliverOrder_withMissingOrInvalidPin_returns400(String body) throws Exception {
+        mockMvc.perform(patch("/orders/1/deliver").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deliverOrder_withoutBody_returns400() throws Exception {
+        mockMvc.perform(patch("/orders/1/deliver").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deliverOrder_withWrongPin_returns400() throws Exception {
+        when(orderHandler.deliverOrder(eq(1L), any())).thenThrow(new InvalidPinException());
+
+        mockMvc.perform(patch("/orders/1/deliver").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON).content(PIN_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("El PIN de seguridad es incorrecto"));
+    }
+
+    @Test
+    void deliverOrder_whenOrderIsNotReady_returns409() throws Exception {
+        when(orderHandler.deliverOrder(eq(1L), any())).thenThrow(new OrderNotReadyException());
+
+        mockMvc.perform(patch("/orders/1/deliver").header(HttpHeaders.AUTHORIZATION, bearer("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON).content(PIN_BODY))
+                .andExpect(status().isConflict());
     }
 }

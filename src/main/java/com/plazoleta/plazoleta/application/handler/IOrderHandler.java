@@ -1,5 +1,6 @@
 package com.plazoleta.plazoleta.application.handler;
 
+import com.plazoleta.plazoleta.application.dto.request.OrderDeliveryRequestDto;
 import com.plazoleta.plazoleta.application.dto.request.OrderRequestDto;
 import com.plazoleta.plazoleta.application.dto.response.OrderResponseDto;
 import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
@@ -14,4 +15,6 @@ public interface IOrderHandler {
     OrderResponseDto assignOrder(Long orderId);
 
     OrderResponseDto markOrderReady(Long orderId);
+
+    OrderResponseDto deliverOrder(Long orderId, OrderDeliveryRequestDto orderDeliveryRequestDto);
 }
