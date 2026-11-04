@@ -21,6 +21,10 @@ import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.ICategoryRep
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IDishRepository;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.repository.IRestaurantRepository;
 import com.plazoleta.plazoleta.domain.api.IOrderServicePort;
+import com.plazoleta.plazoleta.domain.api.IOrderStatusServicePort;
+import com.plazoleta.plazoleta.domain.spi.ITraceClientPort;
+import com.plazoleta.plazoleta.domain.usecase.OrderStatusUseCase;
+import com.plazoleta.plazoleta.infrastructure.output.client.adapter.TraceRestClientAdapter;
 import com.plazoleta.plazoleta.domain.spi.IOrderPersistencePort;
 import com.plazoleta.plazoleta.domain.usecase.OrderUseCase;
 import com.plazoleta.plazoleta.infrastructure.output.jpa.adapter.OrderJpaAdapter;
@@ -51,6 +55,9 @@ public class BeanConfiguration {
     @Value("${clients.mensajeria.url}")
     private String mensajeriaUrl;
 
+    @Value("${clients.trazabilidad.url}")
+    private String trazabilidadUrl;
+
     @Bean
     public RestClient usuariosRestClient(RestClient.Builder builder) {
         return builder.clone().baseUrl(usuariosUrl).build();
@@ -59,6 +66,16 @@ public class BeanConfiguration {
     @Bean
     public RestClient mensajeriaRestClient(RestClient.Builder builder) {
         return builder.clone().baseUrl(mensajeriaUrl).build();
+    }
+
+    @Bean
+    public RestClient trazabilidadRestClient(RestClient.Builder builder) {
+        return builder.clone().baseUrl(trazabilidadUrl).build();
+    }
+
+    @Bean
+    public ITraceClientPort traceClientPort(RestClient trazabilidadRestClient) {
+        return new TraceRestClientAdapter(trazabilidadRestClient);
     }
 
     @Bean
@@ -113,8 +130,16 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public IOrderServicePort orderServicePort(IUserClientPort userClientPort, ISmsClientPort smsClientPort) {
+    public IOrderServicePort orderServicePort(ITraceClientPort traceClientPort) {
         return new OrderUseCase(orderPersistencePort(), restaurantPersistencePort(), dishPersistencePort(),
-                authenticatedUserPort(), userClientPort, smsClientPort, clock());
+                authenticatedUserPort(), traceClientPort, clock());
+    }
+
+    @Bean
+    public IOrderStatusServicePort orderStatusServicePort(IUserClientPort userClientPort,
+                                                          ISmsClientPort smsClientPort,
+                                                          ITraceClientPort traceClientPort) {
+        return new OrderStatusUseCase(orderPersistencePort(), authenticatedUserPort(), userClientPort, smsClientPort,
+                traceClientPort);
     }
 }
