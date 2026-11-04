@@ -1,23 +1,13 @@
 package com.plazoleta.plazoleta.domain.usecase;
 
 import com.plazoleta.plazoleta.domain.exception.ClientHasActiveOrderException;
-import com.plazoleta.plazoleta.domain.exception.ClientNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DishFromAnotherRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.DishNotAvailableException;
 import com.plazoleta.plazoleta.domain.exception.DishNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.DuplicateDishInOrderException;
 import com.plazoleta.plazoleta.domain.exception.EmployeeWithoutRestaurantException;
 import com.plazoleta.plazoleta.domain.exception.InvalidPaginationException;
-import com.plazoleta.plazoleta.domain.exception.InvalidPinException;
 import com.plazoleta.plazoleta.domain.exception.InvalidQuantityException;
-import com.plazoleta.plazoleta.domain.exception.NotAssignedEmployeeException;
-import com.plazoleta.plazoleta.domain.exception.OrderCannotBeCancelledException;
-import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherClientException;
-import com.plazoleta.plazoleta.domain.exception.OrderFromAnotherRestaurantException;
-import com.plazoleta.plazoleta.domain.exception.OrderNotFoundException;
-import com.plazoleta.plazoleta.domain.exception.OrderNotInPreparationException;
-import com.plazoleta.plazoleta.domain.exception.OrderNotPendingException;
-import com.plazoleta.plazoleta.domain.exception.OrderNotReadyException;
 import com.plazoleta.plazoleta.domain.exception.RequiredFieldException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.domain.model.Dish;
@@ -30,14 +20,11 @@ import com.plazoleta.plazoleta.domain.spi.IAuthenticatedUserPort;
 import com.plazoleta.plazoleta.domain.spi.IDishPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IOrderPersistencePort;
 import com.plazoleta.plazoleta.domain.spi.IRestaurantPersistencePort;
-import com.plazoleta.plazoleta.domain.spi.ISmsClientPort;
-import com.plazoleta.plazoleta.domain.spi.IUserClientPort;
+import com.plazoleta.plazoleta.domain.spi.ITraceClientPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -47,20 +34,15 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -88,10 +70,7 @@ class OrderUseCaseTest {
     private IAuthenticatedUserPort authenticatedUserPort;
 
     @Mock
-    private IUserClientPort userClientPort;
-
-    @Mock
-    private ISmsClientPort smsClientPort;
+    private ITraceClientPort traceClientPort;
 
     private OrderUseCase orderUseCase;
 
@@ -99,7 +78,7 @@ class OrderUseCaseTest {
     void setUp() {
         Clock fixedClock = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         orderUseCase = new OrderUseCase(orderPersistencePort, restaurantPersistencePort, dishPersistencePort,
-                authenticatedUserPort, userClientPort, smsClientPort, fixedClock);
+                authenticatedUserPort, traceClientPort, fixedClock);
     }
 
     private Order order(OrderDish... dishes) {
@@ -141,6 +120,8 @@ class OrderUseCaseTest {
         assertEquals(2, saved.getDishes().size());
         assertEquals(2, saved.getDishes().get(0).getQuantity());
         assertSame(saved, result);
+        // HU-17: se registra el primer cambio de estado (sin estado anterior -> PENDIENTE).
+        verify(traceClientPort).registerStatusChange(saved, null);
     }
 
     @Test
@@ -316,372 +297,25 @@ class OrderUseCaseTest {
         assertThrows(InvalidPaginationException.class, () -> orderUseCase.listRestaurantOrders(null, 0, null));
     }
 
-    // ---------- HU-13: asignarse un pedido (pasa a EN_PREPARACION) ----------
+    // ---------- HU-17: trazabilidad al crear el pedido ----------
 
-    private static final Long ORDER_ID = 100L;
-    private static final Long EMPLOYEE_ID = 8L;
+    @Test
+    void createOrder_whenOrderIsInvalid_doesNotRegisterTrace() {
+        Order order = order();
 
-    private Order storedOrder(Long restaurantId, OrderStatus status) {
-        return new Order(ORDER_ID, CLIENT_ID, restaurantId, NOW, status, null,
-                new ArrayList<>(List.of(new OrderDish(1L, 2))));
+        assertThrows(RequiredFieldException.class, () -> orderUseCase.createOrder(order));
+        verify(traceClientPort, never()).registerStatusChange(any(), any());
     }
 
     @Test
-    void assignOrder_pendingOrderOfItsRestaurant_assignsEmployeeAndMovesToInPreparation() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(EMPLOYEE_ID);
-        when(orderPersistencePort.findById(ORDER_ID))
-                .thenReturn(Optional.of(storedOrder(RESTAURANT_ID, OrderStatus.PENDIENTE)));
-        when(orderPersistencePort.updateOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Order result = orderUseCase.assignOrder(ORDER_ID);
-
-        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
-        verify(orderPersistencePort).updateOrder(captor.capture());
-        assertEquals(EMPLOYEE_ID, captor.getValue().getEmployeeId());
-        assertEquals(OrderStatus.EN_PREPARACION, captor.getValue().getStatus());
-        assertEquals(CLIENT_ID, captor.getValue().getClientId());
-        assertSame(captor.getValue(), result);
-    }
-
-    @Test
-    void assignOrder_whenOrderDoesNotExist_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.empty());
-
-        assertThrows(OrderNotFoundException.class, () -> orderUseCase.assignOrder(ORDER_ID));
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void assignOrder_whenOrderIsFromAnotherRestaurant_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID))
-                .thenReturn(Optional.of(storedOrder(OTHER_RESTAURANT_ID, OrderStatus.PENDIENTE)));
-
-        assertThrows(OrderFromAnotherRestaurantException.class, () -> orderUseCase.assignOrder(ORDER_ID));
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = OrderStatus.class, names = {"EN_PREPARACION", "LISTO", "ENTREGADO", "CANCELADO"})
-    void assignOrder_whenOrderIsNotPending_throwsException(OrderStatus status) {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(RESTAURANT_ID, status)));
-
-        assertThrows(OrderNotPendingException.class, () -> orderUseCase.assignOrder(ORDER_ID));
-        verify(authenticatedUserPort, never()).getAuthenticatedUserId();
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void assignOrder_whenEmployeeHasNoRestaurant_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(null);
-
-        assertThrows(EmployeeWithoutRestaurantException.class, () -> orderUseCase.assignOrder(ORDER_ID));
-        verify(orderPersistencePort, never()).findById(any());
-    }
-
-    @Test
-    void assignOrder_withNullId_throwsException() {
-        assertThrows(RequiredFieldException.class, () -> orderUseCase.assignOrder(null));
-        verify(orderPersistencePort, never()).findById(any());
-    }
-
-    // ---------- HU-14: pedido listo (pasa a LISTO y se notifica al cliente con un PIN) ----------
-
-    private static final String CLIENT_PHONE = "+573005698325";
-
-    private Order orderInPreparation(Long employeeId) {
-        Order order = storedOrder(RESTAURANT_ID, OrderStatus.EN_PREPARACION);
-        order.setEmployeeId(employeeId);
-        return order;
-    }
-
-    private void givenAssignedEmployeeWithOrderInPreparation() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(EMPLOYEE_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenAnswer(inv -> Optional.of(orderInPreparation(EMPLOYEE_ID)));
-    }
-
-    @Test
-    void markOrderReady_assignedEmployee_sendsPinBySmsAndMovesToReady() {
-        givenAssignedEmployeeWithOrderInPreparation();
-        when(userClientPort.findUserPhoneById(CLIENT_ID)).thenReturn(Optional.of(CLIENT_PHONE));
-        when(orderPersistencePort.updateOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Order result = orderUseCase.markOrderReady(ORDER_ID);
-
-        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
-        verify(orderPersistencePort).updateOrder(orderCaptor.capture());
-        Order saved = orderCaptor.getValue();
-        assertEquals(OrderStatus.LISTO, saved.getStatus());
-        assertEquals(EMPLOYEE_ID, saved.getEmployeeId());
-        assertTrue(saved.getPin().matches("\\d{6}"));
-
-        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-        verify(smsClientPort).sendSms(eq(CLIENT_PHONE), messageCaptor.capture());
-        assertEquals("Tu pedido #" + ORDER_ID + " esta listo. Presenta este PIN para reclamarlo: " + saved.getPin(),
-                messageCaptor.getValue());
-        assertSame(saved, result);
-    }
-
-    @Test
-    void markOrderReady_generatesRandomPins() {
-        givenAssignedEmployeeWithOrderInPreparation();
-        when(userClientPort.findUserPhoneById(CLIENT_ID)).thenReturn(Optional.of(CLIENT_PHONE));
-        when(orderPersistencePort.updateOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Set<String> pins = new HashSet<>();
-        for (int i = 0; i < 20; i++) {
-            pins.add(orderUseCase.markOrderReady(ORDER_ID).getPin());
-        }
-
-        assertTrue(pins.size() > 1);
-    }
-
-    @Test
-    void markOrderReady_whenSmsFails_orderIsNotUpdated() {
-        givenAssignedEmployeeWithOrderInPreparation();
-        when(userClientPort.findUserPhoneById(CLIENT_ID)).thenReturn(Optional.of(CLIENT_PHONE));
-        doThrow(new IllegalStateException("mensajeria caida")).when(smsClientPort).sendSms(anyString(), anyString());
-
-        assertThrows(IllegalStateException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void markOrderReady_whenClientDoesNotExist_throwsException() {
-        givenAssignedEmployeeWithOrderInPreparation();
-        when(userClientPort.findUserPhoneById(CLIENT_ID)).thenReturn(Optional.empty());
-
-        assertThrows(ClientNotFoundException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
-        verify(smsClientPort, never()).sendSms(anyString(), anyString());
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void markOrderReady_whenEmployeeIsNotTheAssignedOne_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(EMPLOYEE_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(orderInPreparation(99L)));
-
-        assertThrows(NotAssignedEmployeeException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
-        verify(userClientPort, never()).findUserPhoneById(any());
-        verify(smsClientPort, never()).sendSms(anyString(), anyString());
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = OrderStatus.class, names = {"PENDIENTE", "LISTO", "ENTREGADO", "CANCELADO"})
-    void markOrderReady_whenOrderIsNotInPreparation_throwsException(OrderStatus status) {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(RESTAURANT_ID, status)));
-
-        assertThrows(OrderNotInPreparationException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
-        verify(smsClientPort, never()).sendSms(anyString(), anyString());
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void markOrderReady_whenOrderIsFromAnotherRestaurant_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID))
-                .thenReturn(Optional.of(storedOrder(OTHER_RESTAURANT_ID, OrderStatus.EN_PREPARACION)));
-
-        assertThrows(OrderFromAnotherRestaurantException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
-        verify(smsClientPort, never()).sendSms(anyString(), anyString());
-    }
-
-    @Test
-    void markOrderReady_whenOrderDoesNotExist_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.empty());
-
-        assertThrows(OrderNotFoundException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
-    }
-
-    @Test
-    void markOrderReady_whenEmployeeHasNoRestaurant_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(null);
-
-        assertThrows(EmployeeWithoutRestaurantException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
-        verify(orderPersistencePort, never()).findById(any());
-    }
-
-    @Test
-    void markOrderReady_withNullId_throwsException() {
-        assertThrows(RequiredFieldException.class, () -> orderUseCase.markOrderReady(null));
-        verify(orderPersistencePort, never()).findById(any());
-    }
-
-    // ---------- HU-15: pedido entregado (LISTO -> ENTREGADO validando el PIN) ----------
-
-    private static final String PIN = "304930";
-
-    private Order readyOrder(Long restaurantId) {
-        Order order = storedOrder(restaurantId, OrderStatus.LISTO);
-        order.setEmployeeId(EMPLOYEE_ID);
-        order.setPin(PIN);
-        return order;
-    }
-
-    @Test
-    void deliverOrder_readyOrderWithCorrectPin_movesToDelivered() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(readyOrder(RESTAURANT_ID)));
-        when(orderPersistencePort.updateOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Order result = orderUseCase.deliverOrder(ORDER_ID, PIN);
-
-        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
-        verify(orderPersistencePort).updateOrder(captor.capture());
-        assertEquals(OrderStatus.ENTREGADO, captor.getValue().getStatus());
-        assertEquals(EMPLOYEE_ID, captor.getValue().getEmployeeId());
-        assertSame(captor.getValue(), result);
-    }
-
-    @Test
-    void deliverOrder_withWrongPin_throwsExceptionAndKeepsOrderReady() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        Order order = readyOrder(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        assertThrows(InvalidPinException.class, () -> orderUseCase.deliverOrder(ORDER_ID, "000000"));
-        assertEquals(OrderStatus.LISTO, order.getStatus());
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = OrderStatus.class, names = {"PENDIENTE", "EN_PREPARACION", "ENTREGADO", "CANCELADO"})
-    void deliverOrder_whenOrderIsNotReady_throwsException(OrderStatus status) {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        Order order = storedOrder(RESTAURANT_ID, status);
-        order.setPin(PIN);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        assertThrows(OrderNotReadyException.class, () -> orderUseCase.deliverOrder(ORDER_ID, PIN));
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void deliverOrder_whenOrderIsFromAnotherRestaurant_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(readyOrder(OTHER_RESTAURANT_ID)));
-
-        assertThrows(OrderFromAnotherRestaurantException.class, () -> orderUseCase.deliverOrder(ORDER_ID, PIN));
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void deliverOrder_whenOrderDoesNotExist_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.empty());
-
-        assertThrows(OrderNotFoundException.class, () -> orderUseCase.deliverOrder(ORDER_ID, PIN));
-    }
-
-    @Test
-    void deliverOrder_whenEmployeeHasNoRestaurant_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(null);
-
-        assertThrows(EmployeeWithoutRestaurantException.class, () -> orderUseCase.deliverOrder(ORDER_ID, PIN));
-        verify(orderPersistencePort, never()).findById(any());
-    }
-
-    @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = "   ")
-    void deliverOrder_withoutPin_throwsException(String pin) {
-        assertThrows(RequiredFieldException.class, () -> orderUseCase.deliverOrder(ORDER_ID, pin));
-        verify(orderPersistencePort, never()).findById(any());
-    }
-
-    @Test
-    void deliverOrder_withNullId_throwsException() {
-        assertThrows(RequiredFieldException.class, () -> orderUseCase.deliverOrder(null, PIN));
-        verify(orderPersistencePort, never()).findById(any());
-    }
-
-    @Test
-    void deliveredOrder_cannotBeAssignedOrMarkedReadyAgain() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID))
-                .thenReturn(Optional.of(storedOrder(RESTAURANT_ID, OrderStatus.ENTREGADO)));
-
-        assertThrows(OrderNotPendingException.class, () -> orderUseCase.assignOrder(ORDER_ID));
-        assertThrows(OrderNotInPreparationException.class, () -> orderUseCase.markOrderReady(ORDER_ID));
-        assertThrows(OrderNotReadyException.class, () -> orderUseCase.deliverOrder(ORDER_ID, PIN));
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    // ---------- HU-16: cancelar pedido (solo PENDIENTE, solo el cliente duenio) ----------
-
-    @Test
-    void cancelOrder_pendingOrderOfTheClient_movesToCancelled() {
-        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(CLIENT_ID);
-        when(orderPersistencePort.findById(ORDER_ID))
-                .thenReturn(Optional.of(storedOrder(RESTAURANT_ID, OrderStatus.PENDIENTE)));
-        when(orderPersistencePort.updateOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Order result = orderUseCase.cancelOrder(ORDER_ID);
-
-        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
-        verify(orderPersistencePort).updateOrder(captor.capture());
-        assertEquals(OrderStatus.CANCELADO, captor.getValue().getStatus());
-        assertEquals(CLIENT_ID, captor.getValue().getClientId());
-        assertSame(captor.getValue(), result);
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = OrderStatus.class, names = {"EN_PREPARACION", "LISTO", "ENTREGADO", "CANCELADO"})
-    void cancelOrder_whenOrderIsNotPending_throwsExceptionWithHuMessage(OrderStatus status) {
-        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(CLIENT_ID);
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(RESTAURANT_ID, status)));
-
-        OrderCannotBeCancelledException ex =
-                assertThrows(OrderCannotBeCancelledException.class, () -> orderUseCase.cancelOrder(ORDER_ID));
-        assertEquals("Lo sentimos, tu pedido ya está en preparación y no se puede cancelar", ex.getMessage());
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void cancelOrder_whenOrderBelongsToAnotherClient_throwsException() {
-        when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(99L);
-        when(orderPersistencePort.findById(ORDER_ID))
-                .thenReturn(Optional.of(storedOrder(RESTAURANT_ID, OrderStatus.PENDIENTE)));
-
-        assertThrows(OrderFromAnotherClientException.class, () -> orderUseCase.cancelOrder(ORDER_ID));
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void cancelOrder_whenOrderDoesNotExist_throwsException() {
-        when(orderPersistencePort.findById(ORDER_ID)).thenReturn(Optional.empty());
-
-        assertThrows(OrderNotFoundException.class, () -> orderUseCase.cancelOrder(ORDER_ID));
-        verify(orderPersistencePort, never()).updateOrder(any());
-    }
-
-    @Test
-    void cancelOrder_withNullId_throwsException() {
-        assertThrows(RequiredFieldException.class, () -> orderUseCase.cancelOrder(null));
-        verify(orderPersistencePort, never()).findById(any());
-    }
-
-    @Test
-    void cancelledOrder_isNotInProcess_soClientCanOrderAgain() {
-        assertTrue(OrderStatus.IN_PROCESS.contains(OrderStatus.PENDIENTE));
-        assertFalse(OrderStatus.IN_PROCESS.contains(OrderStatus.CANCELADO));
-    }
-
-    @Test
-    void cancelledOrder_cannotBeAssignedByEmployee() {
-        when(authenticatedUserPort.getAuthenticatedRestaurantId()).thenReturn(RESTAURANT_ID);
-        when(orderPersistencePort.findById(ORDER_ID))
-                .thenReturn(Optional.of(storedOrder(RESTAURANT_ID, OrderStatus.CANCELADO)));
-
-        assertThrows(OrderNotPendingException.class, () -> orderUseCase.assignOrder(ORDER_ID));
-        verify(orderPersistencePort, never()).updateOrder(any());
+    void createOrder_whenTraceFails_propagatesTheError() {
+        givenRestaurantExistsAndClientWithoutActiveOrder();
+        when(dishPersistencePort.findById(1L)).thenReturn(Optional.of(dish(1L, RESTAURANT_ID, true)));
+        when(orderPersistencePort.saveOrder(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        doThrow(new IllegalStateException("trazabilidad caida")).when(traceClientPort).registerStatusChange(any(), any());
+        Order order = order(new OrderDish(1L, 1));
+
+        // La excepcion hace que el handler (@Transactional) deshaga el pedido guardado.
+        assertThrows(IllegalStateException.class, () -> orderUseCase.createOrder(order));
     }
 }

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Plazoleta - Plazoleta",
-    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere los microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d), y para la carpeta 12 tambien mensajeria (http://localhost:8083).\nCarpeta 13: antes de ejecutarla, copia en la variable de coleccion orderPin el PIN del SMS que muestra la consola de mensajeria al terminar la carpeta 12.\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 -> 05 HU-6 -> 06 HU-7 -> 07 HU-9 -> 08 HU-10 -> 09 HU-11 -> 10 HU-12 -> 11 HU-13 -> 12 HU-14 -> 13 HU-15 -> 14 HU-16 (usar el Collection Runner).",
+    "description": "Pruebas del microservicio plazoleta-plazoleta.\n\nRequiere los microservicios levantados: usuarios ({{usuariosUrl}}) y plazoleta ({{baseUrl}}), cada uno con su PostgreSQL (docker compose up -d), y para la carpeta 12 tambien mensajeria (http://localhost:8083).\nDesde la HU-17 todos los cambios de estado de los pedidos (carpetas 09 a 14) se registran en trazabilidad: plazoleta-trazabilidad ({{trazabilidadUrl}}) tambien debe estar levantado.\nCarpeta 13: antes de ejecutarla, copia en la variable de coleccion orderPin el PIN del SMS que muestra la consola de mensajeria al terminar la carpeta 12.\nOrden de ejecucion: 00 Preparacion -> 01 HU-2 -> 02 Seguridad -> 03 HU-3 -> 04 HU-4 -> 05 HU-6 -> 06 HU-7 -> 07 HU-9 -> 08 HU-10 -> 09 HU-11 -> 10 HU-12 -> 11 HU-13 -> 12 HU-14 -> 13 HU-15 -> 14 HU-16 -> 15 HU-17 (usar el Collection Runner).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -8657,6 +8657,359 @@
                 "exec": [
                   "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
                   "pm.test(\"El pedido cancelado ya no cuenta como pedido en proceso\", () => pm.expect(pm.response.json().status).to.eql(\"PENDIENTE\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "15 - HU-17 Trazabilidad pedido",
+      "description": "GET {{trazabilidadUrl}}/traces/orders/{id} (microservicio plazoleta-trazabilidad, solo CLIENTE). Cada cambio de estado que se hizo en las carpetas anteriores (crear, asignarse, listo, entregar y cancelar) quedo registrado en trazabilidad; aqui el cliente consulta el historial de SUS pedidos. Requiere plazoleta-trazabilidad levantado (puerto 8084, MongoDB con docker compose up -d).",
+      "item": [
+        {
+          "name": "Historial del pedido de la carpeta 09 (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{trazabilidadUrl}}/traces/orders/{{orderId}}",
+              "host": [
+                "{{trazabilidadUrl}}"
+              ],
+              "path": [
+                "traces",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{orderClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const traces = pm.response.json();",
+                  "pm.test(\"El primer registro es la creacion del pedido (sin estado anterior -> PENDIENTE)\", () => {",
+                  "    pm.expect(traces[0].previousStatus).to.eql(null);",
+                  "    pm.expect(traces[0].newStatus).to.eql(\"PENDIENTE\");",
+                  "});",
+                  "pm.test(\"Cada cambio parte del estado anterior y van del mas antiguo al mas reciente\", () => {",
+                  "    for (let i = 1; i < traces.length; i++) {",
+                  "        pm.expect(traces[i].previousStatus).to.eql(traces[i - 1].newStatus);",
+                  "        pm.expect(new Date(traces[i].date) >= new Date(traces[i - 1].date)).to.eql(true);",
+                  "    }",
+                  "});",
+                  "pm.test(\"Registra la asignacion y el pedido listo (carpetas 11 y 12)\", () => {",
+                  "    pm.expect(traces.length).to.be.at.least(3);",
+                  "    pm.expect(traces[1].newStatus).to.eql(\"EN_PREPARACION\");",
+                  "    pm.expect(traces[1].employeeId).to.not.eql(null);",
+                  "    pm.expect(traces[2].newStatus).to.eql(\"LISTO\");",
+                  "});",
+                  "pm.test(\"Si se entrego en la carpeta 13, el ultimo registro es ENTREGADO\", () => {",
+                  "    if (traces.length === 4) pm.expect(traces[3].newStatus).to.eql(\"ENTREGADO\");",
+                  "    pm.expect(traces.length).to.be.at.most(4);",
+                  "});",
+                  "pm.test(\"Todos los registros son del pedido y del cliente\", () => {",
+                  "    traces.forEach((t) => pm.expect(t.orderId).to.eql(Number(pm.collectionVariables.get(\"orderId\"))));",
+                  "    traces.forEach((t) => pm.expect(t.clientId).to.eql(traces[0].clientId));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Historial del pedido cancelado en la carpeta 14 (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{trazabilidadUrl}}/traces/orders/{{cancelOrderId}}",
+              "host": [
+                "{{trazabilidadUrl}}"
+              ],
+              "path": [
+                "traces",
+                "orders",
+                "{{cancelOrderId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu16ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const traces = pm.response.json();",
+                  "pm.test(\"El primer registro es la creacion del pedido (sin estado anterior -> PENDIENTE)\", () => {",
+                  "    pm.expect(traces[0].previousStatus).to.eql(null);",
+                  "    pm.expect(traces[0].newStatus).to.eql(\"PENDIENTE\");",
+                  "});",
+                  "pm.test(\"Cada cambio parte del estado anterior y van del mas antiguo al mas reciente\", () => {",
+                  "    for (let i = 1; i < traces.length; i++) {",
+                  "        pm.expect(traces[i].previousStatus).to.eql(traces[i - 1].newStatus);",
+                  "        pm.expect(new Date(traces[i].date) >= new Date(traces[i - 1].date)).to.eql(true);",
+                  "    }",
+                  "});",
+                  "pm.test(\"PENDIENTE -> CANCELADO, sin registros de los intentos rechazados (409)\", () => {",
+                  "    pm.expect(traces.length).to.eql(2);",
+                  "    pm.expect(traces[1].previousStatus).to.eql(\"PENDIENTE\");",
+                  "    pm.expect(traces[1].newStatus).to.eql(\"CANCELADO\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Otro cliente consulta el historial (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{trazabilidadUrl}}/traces/orders/{{orderId}}",
+              "host": [
+                "{{trazabilidadUrl}}"
+              ],
+              "path": [
+                "traces",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{hu16ClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Mensaje: Solo puede consultar la trazabilidad de sus propios pedidos\", () => pm.expect(pm.response.json().message).to.eql(\"Solo puede consultar la trazabilidad de sus propios pedidos\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pedido sin registros (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{trazabilidadUrl}}/traces/orders/999999999",
+              "host": [
+                "{{trazabilidadUrl}}"
+              ],
+              "path": [
+                "traces",
+                "orders",
+                "999999999"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{orderClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Id no numerico (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{trazabilidadUrl}}/traces/orders/abc",
+              "host": [
+                "{{trazabilidadUrl}}"
+              ],
+              "path": [
+                "traces",
+                "orders",
+                "abc"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{orderClientToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "EMPLEADO intenta consultar (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{trazabilidadUrl}}/traces/orders/{{orderId}}",
+              "host": [
+                "{{trazabilidadUrl}}"
+              ],
+              "path": [
+                "traces",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PROPIETARIO intenta consultar (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{trazabilidadUrl}}/traces/orders/{{orderId}}",
+              "host": [
+                "{{trazabilidadUrl}}"
+              ],
+              "path": [
+                "traces",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{trazabilidadUrl}}/traces/orders/{{orderId}}",
+              "host": [
+                "{{trazabilidadUrl}}"
+              ],
+              "path": [
+                "traces",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
                 ]
               }
             }

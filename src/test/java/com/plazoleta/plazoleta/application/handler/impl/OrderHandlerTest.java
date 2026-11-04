@@ -8,6 +8,7 @@ import com.plazoleta.plazoleta.application.dto.response.PageResponseDto;
 import com.plazoleta.plazoleta.application.mapper.IOrderRequestMapper;
 import com.plazoleta.plazoleta.application.mapper.IOrderResponseMapper;
 import com.plazoleta.plazoleta.domain.api.IOrderServicePort;
+import com.plazoleta.plazoleta.domain.api.IOrderStatusServicePort;
 import com.plazoleta.plazoleta.domain.model.Order;
 import com.plazoleta.plazoleta.domain.model.OrderStatus;
 import com.plazoleta.plazoleta.domain.model.PageResult;
@@ -29,6 +30,9 @@ class OrderHandlerTest {
 
     @Mock
     private IOrderServicePort orderServicePort;
+
+    @Mock
+    private IOrderStatusServicePort orderStatusServicePort;
 
     @Mock
     private IOrderRequestMapper orderRequestMapper;
@@ -74,7 +78,7 @@ class OrderHandlerTest {
     void assignOrder_callsDomainAndMapsResponse() {
         Order assigned = new Order();
         OrderResponseDto response = new OrderResponseDto();
-        when(orderServicePort.assignOrder(100L)).thenReturn(assigned);
+        when(orderStatusServicePort.assignOrder(100L)).thenReturn(assigned);
         when(orderResponseMapper.toResponse(assigned)).thenReturn(response);
 
         assertSame(response, orderHandler.assignOrder(100L));
@@ -84,7 +88,7 @@ class OrderHandlerTest {
     void markOrderReady_callsDomainAndMapsResponse() {
         Order ready = new Order();
         OrderResponseDto response = new OrderResponseDto();
-        when(orderServicePort.markOrderReady(100L)).thenReturn(ready);
+        when(orderStatusServicePort.markOrderReady(100L)).thenReturn(ready);
         when(orderResponseMapper.toResponse(ready)).thenReturn(response);
 
         assertSame(response, orderHandler.markOrderReady(100L));
@@ -94,7 +98,7 @@ class OrderHandlerTest {
     void deliverOrder_passesPinToDomainAndMapsResponse() {
         Order delivered = new Order();
         OrderResponseDto response = new OrderResponseDto();
-        when(orderServicePort.deliverOrder(100L, "304930")).thenReturn(delivered);
+        when(orderStatusServicePort.deliverOrder(100L, "304930")).thenReturn(delivered);
         when(orderResponseMapper.toResponse(delivered)).thenReturn(response);
 
         assertSame(response, orderHandler.deliverOrder(100L, new OrderDeliveryRequestDto("304930")));
@@ -104,7 +108,7 @@ class OrderHandlerTest {
     void cancelOrder_callsDomainAndMapsResponse() {
         Order cancelled = new Order();
         OrderResponseDto response = new OrderResponseDto();
-        when(orderServicePort.cancelOrder(100L)).thenReturn(cancelled);
+        when(orderStatusServicePort.cancelOrder(100L)).thenReturn(cancelled);
         when(orderResponseMapper.toResponse(cancelled)).thenReturn(response);
 
         assertSame(response, orderHandler.cancelOrder(100L));

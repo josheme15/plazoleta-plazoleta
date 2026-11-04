@@ -23,6 +23,7 @@ import com.plazoleta.plazoleta.infrastructure.input.rest.OrderRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantMenuRestController;
 import com.plazoleta.plazoleta.infrastructure.input.rest.RestaurantRestController;
 import com.plazoleta.plazoleta.infrastructure.output.client.exception.MessagingServiceUnavailableException;
+import com.plazoleta.plazoleta.infrastructure.output.client.exception.TraceServiceUnavailableException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -615,5 +616,17 @@ class EndpointSecurityTest {
     void cancelOrder_withNonNumericId_returns400() throws Exception {
         mockMvc.perform(patch("/orders/abc/cancel").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ---------- HU-17: si trazabilidad no esta disponible, el cambio de estado no se aplica ----------
+
+    @Test
+    void cancelOrder_whenTrazabilidadIsDown_returns503() throws Exception {
+        when(orderHandler.cancelOrder(1L))
+                .thenThrow(new TraceServiceUnavailableException(new IllegalStateException("caido")));
+
+        mockMvc.perform(patch("/orders/1/cancel").header(HttpHeaders.AUTHORIZATION, bearer("CLIENT")))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value(503));
     }
 }

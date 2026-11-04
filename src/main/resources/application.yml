@@ -27,6 +27,8 @@ clients:
     url: ${USUARIOS_URL:http://localhost:8081}
   mensajeria:
     url: ${MENSAJERIA_URL:http://localhost:8083}
+  trazabilidad:
+    url: ${TRAZABILIDAD_URL:http://localhost:8084}
 
 springdoc:
   swagger-ui:
