@@ -8,6 +8,7 @@ import com.plazoleta.plazoleta.application.handler.IOrderHandler;
 import com.plazoleta.plazoleta.application.mapper.IOrderRequestMapper;
 import com.plazoleta.plazoleta.application.mapper.IOrderResponseMapper;
 import com.plazoleta.plazoleta.domain.api.IOrderServicePort;
+import com.plazoleta.plazoleta.domain.api.IOrderStatusServicePort;
 import com.plazoleta.plazoleta.domain.model.OrderStatus;
 import com.plazoleta.plazoleta.domain.model.PageResult;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderHandler implements IOrderHandler {
 
     private final IOrderServicePort orderServicePort;
+    private final IOrderStatusServicePort orderStatusServicePort;
     private final IOrderRequestMapper orderRequestMapper;
     private final IOrderResponseMapper orderResponseMapper;
 
@@ -39,22 +41,22 @@ public class OrderHandler implements IOrderHandler {
 
     @Override
     public OrderResponseDto assignOrder(Long orderId) {
-        return orderResponseMapper.toResponse(orderServicePort.assignOrder(orderId));
+        return orderResponseMapper.toResponse(orderStatusServicePort.assignOrder(orderId));
     }
 
     @Override
     public OrderResponseDto markOrderReady(Long orderId) {
-        return orderResponseMapper.toResponse(orderServicePort.markOrderReady(orderId));
+        return orderResponseMapper.toResponse(orderStatusServicePort.markOrderReady(orderId));
     }
 
     @Override
     public OrderResponseDto deliverOrder(Long orderId, OrderDeliveryRequestDto orderDeliveryRequestDto) {
         return orderResponseMapper.toResponse(
-                orderServicePort.deliverOrder(orderId, orderDeliveryRequestDto.getPin()));
+                orderStatusServicePort.deliverOrder(orderId, orderDeliveryRequestDto.getPin()));
     }
 
     @Override
     public OrderResponseDto cancelOrder(Long orderId) {
-        return orderResponseMapper.toResponse(orderServicePort.cancelOrder(orderId));
+        return orderResponseMapper.toResponse(orderStatusServicePort.cancelOrder(orderId));
     }
 }

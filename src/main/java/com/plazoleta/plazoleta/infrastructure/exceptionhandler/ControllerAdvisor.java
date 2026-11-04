@@ -19,6 +19,7 @@ import com.plazoleta.plazoleta.domain.exception.OrderNotReadyException;
 import com.plazoleta.plazoleta.domain.exception.OwnerNotFoundException;
 import com.plazoleta.plazoleta.domain.exception.RestaurantNotFoundException;
 import com.plazoleta.plazoleta.infrastructure.output.client.exception.MessagingServiceUnavailableException;
+import com.plazoleta.plazoleta.infrastructure.output.client.exception.TraceServiceUnavailableException;
 import com.plazoleta.plazoleta.infrastructure.output.client.exception.UserServiceUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -59,7 +60,8 @@ public class ControllerAdvisor {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    @ExceptionHandler({UserServiceUnavailableException.class, MessagingServiceUnavailableException.class})
+    @ExceptionHandler({UserServiceUnavailableException.class, MessagingServiceUnavailableException.class,
+            TraceServiceUnavailableException.class})
     public ResponseEntity<ErrorResponse> handleServiceUnavailable(RuntimeException ex) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
     }

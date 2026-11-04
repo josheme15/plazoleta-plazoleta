@@ -21,6 +21,7 @@ Responsable de restaurantes, platos y pedidos.
 | HU-14 | Pedido listo: notificar al cliente por SMS con un PIN | `PATCH /orders/{id}/ready` | EMPLOYEE (asignado al pedido) |
 | HU-15 | Pedido entregado validando el PIN del cliente | `PATCH /orders/{id}/deliver` | EMPLOYEE |
 | HU-16 | Cancelar pedido | `PATCH /orders/{id}/cancel` | CLIENT (dueño del pedido) |
+| HU-17 | Trazabilidad: registrar cada cambio de estado del pedido | (en cada cambio de estado → `plazoleta-trazabilidad`) | — |
 
 ### Reglas de la HU-2
 
@@ -45,6 +46,26 @@ Responsable de restaurantes, platos y pedidos.
 - Hay que enviar al menos uno de los dos (si no, 400).
 - Precio: entero positivo mayor a 0; descripción: no puede quedar vacía (400).
 - Solo el propietario del restaurante al que pertenece el plato puede editarlo (403); plato inexistente: 404.
+
+### Reglas de la HU-17
+
+- **Cada cambio de estado de un pedido se registra** en el microservicio `plazoleta-trazabilidad`
+  (`POST /traces`), con el pedido, cliente, restaurante, empleado asignado, estado anterior y estado nuevo:
+
+  | Acción | Cambio registrado |
+  |--------|-------------------|
+  | Realizar pedido (HU-11) | — → `PENDIENTE` |
+  | Asignarse el pedido (HU-13) | `PENDIENTE` → `EN_PREPARACION` |
+  | Pedido listo (HU-14) | `EN_PREPARACION` → `LISTO` |
+  | Pedido entregado (HU-15) | `LISTO` → `ENTREGADO` |
+  | Cancelar pedido (HU-16) | `PENDIENTE` → `CANCELADO` |
+
+- Plazoleta reenvía el token de quien hizo el cambio (cliente o empleado).
+- El pedido y su registro se guardan en la misma transacción: si `plazoleta-trazabilidad` no está disponible
+  se responde **503** y el cambio de estado **no se aplica**, para que el historial nunca tenga huecos.
+  Los intentos rechazados (400, 403, 404, 409) no generan registros.
+- La consulta del historial (`GET /traces/orders/{id}`, solo el cliente dueño del pedido) está en
+  `plazoleta-trazabilidad`.
 
 ### Reglas de la HU-16
 
@@ -184,17 +205,19 @@ Categorías precargadas al iniciar el servicio:
 | 4 | Bebidas |
 | 5 | Acompanamientos |
 
-## Dependencia con plazoleta-usuarios y plazoleta-mensajeria
+## Dependencia con plazoleta-usuarios, plazoleta-mensajeria y plazoleta-trazabilidad
 
 Este servicio **no emite tokens**: valida los JWT emitidos por `plazoleta-usuarios` (misma `JWT_SECRET`)
 y consulta `GET /users/{id}` en ese servicio, reenviando el token, para validar el rol del propietario
 (HU-2) y obtener el celular del cliente (HU-14). Para notificar que un pedido está listo llama a
-`POST /sms` de `plazoleta-mensajeria`, también reenviando el token del empleado.
+`POST /sms` de `plazoleta-mensajeria`, también reenviando el token del empleado. En cada cambio de estado de
+un pedido llama a `POST /traces` de `plazoleta-trazabilidad` (HU-17) con el token de quien hizo el cambio.
 
 ```
 Admin ────POST /restaurants (JWT)────► plazoleta ──GET /users/{id} (JWT)──► usuarios
 Empleado ─PATCH /orders/{id}/ready──► plazoleta ──GET /users/{id} (JWT)──► usuarios
-                                                └─POST /sms (JWT)───────► mensajeria
+                                                ├─POST /sms (JWT)───────► mensajeria
+                                                └─POST /traces (JWT)────► trazabilidad
 ```
 
 ## Requisitos
@@ -204,6 +227,7 @@ Empleado ─PATCH /orders/{id}/ready──► plazoleta ──GET /users/{id} (J
 - Docker (para PostgreSQL)
 - `plazoleta-usuarios` en ejecución (puerto 8081)
 - `plazoleta-mensajeria` en ejecución (puerto 8083) para la HU-14
+- `plazoleta-trazabilidad` en ejecución (puerto 8084) para cualquier cambio de estado de un pedido (HU-17)
 
 ## Cómo levantarlo
 
@@ -225,6 +249,7 @@ OpenAPI JSON: http://localhost:8082/v3/api-docs
 | `JWT_SECRET` | misma clave que `plazoleta-usuarios` |
 | `USUARIOS_URL` | `http://localhost:8081` |
 | `MENSAJERIA_URL` | `http://localhost:8083` |
+| `TRAZABILIDAD_URL` | `http://localhost:8084` |
 
 ## Uso rápido
 
@@ -286,8 +311,9 @@ curl -X PATCH http://localhost:8082/orders/1/cancel -H "Authorization: Bearer <T
 
 En la carpeta `postman/`:
 
-- `plazoleta-plazoleta.postman_collection.json`: 168 peticiones y 352 aserciones.
-- `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081) y credenciales del admin.
+- `plazoleta-plazoleta.postman_collection.json`: 176 peticiones y 369 aserciones.
+- `plazoleta-local.postman_environment.json`: `baseUrl` (8082), `usuariosUrl` (8081), `trazabilidadUrl` (8084) y
+  credenciales del admin.
 
 1. En Postman: **Import** → seleccionar ambos archivos.
 2. Seleccionar el entorno **Plazoleta - Local (plazoleta)**.
@@ -317,6 +343,10 @@ entregar, asignar ni marcar listo otra vez (409).
 `14 - HU-16` registra un cliente con un pedido PENDIENTE y lo cancela (CANCELADO); prueba el mensaje de la HU
 al cancelar un pedido que ya no está PENDIENTE (409), otro cliente (403), roles y token, que no se pueda
 cancelar dos veces ni asignar un pedido cancelado (409) y que el cliente pueda hacer un pedido nuevo.
+`15 - HU-17` consulta en `plazoleta-trazabilidad` el historial de los pedidos de las carpetas anteriores: el pedido
+de la carpeta 09 (PENDIENTE → EN_PREPARACION → LISTO → ENTREGADO) y el cancelado de la carpeta 14
+(PENDIENTE → CANCELADO, sin registros de los intentos rechazados); prueba también otro cliente (403), pedido sin
+registros (404), roles y token.
 Los NIT se generan únicos en cada ejecución.
 
 ## Arquitectura
@@ -324,13 +354,17 @@ Los NIT se generan únicos en cada ejecución.
 ```
 domain/            Java puro: modelos (Restaurant, Dish, Order...), puertos (api / spi), casos de uso, excepciones
 application/       DTOs, mappers (MapStruct) y handlers
-infrastructure/    Controller REST, adaptador JPA, clientes HTTP a usuarios y mensajeria, seguridad JWT,
+infrastructure/    Controller REST, adaptador JPA, clientes HTTP a usuarios, mensajeria y trazabilidad, seguridad JWT,
                    manejo de errores y configuración
 ```
 
 El caso de uso valida el rol del propietario a través del puerto `IUserClientPort`;
 su implementación (`UserRestClientAdapter`) usa `RestClient` para llamar al microservicio de usuarios.
 El envío del SMS de la HU-14 pasa por el puerto `ISmsClientPort`, implementado por `SmsRestClientAdapter`.
+
+Los pedidos tienen dos casos de uso: `OrderUseCase` (crear y listar) y `OrderStatusUseCase` (asignarse, listo,
+entregado y cancelar). Ambos registran cada cambio de estado por el puerto `ITraceClientPort`, implementado por
+`TraceRestClientAdapter` (HU-17).
 
 ## Pruebas
 
